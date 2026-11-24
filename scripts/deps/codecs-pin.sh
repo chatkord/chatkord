@@ -1,7 +1,7 @@
 # The software codecs both FFmpeg recipes build (scripts/deps/ffmpeg.sh, scripts/deps/ffmpeg-windows.sh), sourced by
 # each. A tag is pinned with the commit it must be, so a moved tag fails the build; x264 publishes no release tags, so
 # it is pinned by its stable branch's commit (scripts/deps/released.py says when the branch moves on).
-DAV1D_TAG=1.5.4;                DAV1D_COMMIT=54706fc6bc0cdecab7e9593974a4039cc038fca7
+DAV1D_TAG=1.5.5;                DAV1D_COMMIT=6c7bee685677fd997a431302be4fea8ea4017606
 SVT_AV1_TAG=v4.3.0;             SVT_AV1_COMMIT=e3d63405f9ba8219913a7276c2c47d10e5d022fe
 X264_BRANCH=stable;             X264_COMMIT=b35605ace3ddf7c1a5d67a2eb553f034aef41d55
 

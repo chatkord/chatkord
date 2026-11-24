@@ -93,8 +93,9 @@ jobs:
       IMAGE: ${{ needs.builder.outputs.image }}
       # A fork's pull request is given no token that reads the private server image the client's server tests start.
       GATE_NO_CONTAINERS: ${{ github.event.pull_request.head.repo.fork && '1' || '' }}
-      # The server repository's test base, which this repository's token reads once the package grants it.
-      CHATKORD_SERVER_BASE: ghcr.io/chatkord/chatkord-server:test-base
+      # The server of the branch tested (a pull request's base, else the run's own branch): its latest release for
+      # main, else its newest dev release, which this repository's token reads once the package grants it.
+      CHATKORD_SERVER_BASE: ghcr.io/chatkord/chatkord-server:${{ (github.base_ref || github.ref_name) == 'main' && 'latest' || 'develop' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -109,7 +110,10 @@ jobs:
           printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           docker pull "$IMAGE"
           # Pulled here, where the login is: the builder's container has none, and scripts/test-image.sh finds the base held.
-          if [ -z "$GATE_NO_CONTAINERS" ]; then docker pull "$CHATKORD_SERVER_BASE"; fi
+          if [ -z "$GATE_NO_CONTAINERS" ]; then
+            docker pull "$CHATKORD_SERVER_BASE"
+            echo "server: $(docker image inspect --format '{{index .RepoDigests 0}}' "$CHATKORD_SERVER_BASE")"
+          fi
       # Cargo's registry and the builder's target tree, saved only by the scheduled run, so pull requests restore one
       # warm cache rather than each saving its own.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

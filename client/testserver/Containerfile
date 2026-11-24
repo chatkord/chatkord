@@ -1,6 +1,11 @@
-# The server image the tests start (`scripts/test-image.sh`): the server repository's test base (its runtime, sqlite3 for
-# a test that changes the store behind the running server as an operator's SQL would, and the release server) and the
-# test relay (src/bin/relay.rs), run in a container of its own beside the server. The context is the relay's binary.
+# The server image the tests start (`scripts/test-image.sh`): a server image (its runtime and release server), sqlite3
+# for a test that changes the store behind the running server as an operator's SQL would, and the test relay
+# (src/bin/relay.rs), run in a container of its own beside the server. The context is the relay's binary.
 ARG BASE
 FROM ${BASE}
+# The base's own user, read from it by scripts/test-image.sh, so the server runs as it ships.
+ARG SERVER_USER
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends sqlite3 && rm -rf /var/lib/apt/lists/*
+USER ${SERVER_USER}
 COPY chatkord-test-relay /usr/local/bin/chatkord-test-relay

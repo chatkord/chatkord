@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Builds the image the client's server tests start, `localhost/chatkord-server:test`: a server base (the runtime, sqlite3
-# and the release server, no relay) with the test relay (client/testserver) on it, which the gate makes before the
+# Builds the image the client's server tests start, `localhost/chatkord-server:test`: a server image (the runtime and
+# the release server) with sqlite3 and the test relay (client/testserver) on it, which the gate makes before the
 # client's workspace (scripts/gate/workspace.sh, in CI too). The base is, in this order: `$CHATKORD_SERVER_BASE` when it
 # names an image; else, with the server's repository beside this one, what its `scripts/image.sh --test` builds
-# (`localhost/chatkord-server:test-base`); else the private `ghcr.io/chatkord/chatkord-server:test-base` its CI pushes.
+# (`localhost/chatkord-server:test-base`); else the private server image of the branch checked out here,
+# `ghcr.io/chatkord/chatkord-server:latest` on `main` and `:develop` on any other.
 # A container runtime is assumed present and set up: `CHATKORD_CONTAINER`, else podman, else docker.
 # The relay is built in the builder (scripts/ci/builder.sh) in release, incrementally, so an unchanged tree is a cache hit.
 #
@@ -30,7 +31,8 @@ if [[ -z "$base" ]]; then
     "$ROOT/../chatkord-server/scripts/image.sh" --test
     base=localhost/chatkord-server:test-base
   else
-    base=ghcr.io/chatkord/chatkord-server:test-base
+    [[ "$(git -C "$ROOT" branch --show-current)" == main ]] && tag=latest || tag=develop
+    base=ghcr.io/chatkord/chatkord-server:$tag
     "$runtime" pull --quiet "$base" > /dev/null 2>&1 ||
       { echo "FAIL: the server's test image could not be pulled: log in to ghcr.io, or set CHATKORD_SERVER_BASE"; exit 1; }
   fi
@@ -46,7 +48,9 @@ else
 fi
 context="$ROOT/build/test-image"; rm -rf "$context"; mkdir -p "$context"
 cp "$built/chatkord-test-relay" "$context/"
-"$runtime" build --quiet "${format[@]}" --label "$MARK" --build-arg "BASE=$base" --tag "$NAME:test" \
+user="$("$runtime" image inspect --format '{{.Config.User}}' "$base")"
+[[ -n "$user" ]] || { echo "FAIL: the server image $base names no user, so its tests would run it as root"; exit 1; }
+"$runtime" build --quiet "${format[@]}" --label "$MARK" --build-arg "BASE=$base" --build-arg "SERVER_USER=$user" --tag "$NAME:test" \
   --file "$ROOT/client/testserver/Containerfile" "$context" > /dev/null
 "$runtime" image prune --force --filter "label=$MARK" > /dev/null
 echo "image: $NAME:test is the server base $base with this tree's test relay ($runtime)"

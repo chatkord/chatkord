@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The software centre's entry. The name and summary are the desktop entry's and the release version.txt's, filled
+     in by scripts/package/linux.sh. -->
+<component type="desktop-application">
+  <id>chatkord</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>@NAME@</name>
+  <summary>@SUMMARY@</summary>
+  <developer>
+    <name>Chatkord</name>
+  </developer>
+  <description>
+    <p>
+      A place to talk with your community on a server you run: voice channels, screen sharing with its sound, and
+      chat.
+    </p>
+    <p>
+      Screens are encoded on the graphics card where it can, and every stream says which path it took.
+    </p>
+  </description>
+  <launchable type="desktop-id">chatkord.desktop</launchable>
+  <provides>
+    <binary>chatkord</binary>
+  </provides>
+  <categories>
+    <category>Network</category>
+    <category>InstantMessaging</category>
+    <category>Chat</category>
+  </categories>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+    <content_attribute id="social-contacts">intense</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

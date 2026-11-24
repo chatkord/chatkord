@@ -1,0 +1,42 @@
+[package]
+name = "cli"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The command line over the link and the call: register, sign in, list and join channels, speak, listen, share, watch"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "chatkord"
+path = "src/main.rs"
+
+[dependencies]
+call = { path = "../call" }
+media = { path = "../media" }
+capture = { path = "../capture" }
+link = { path = "../link" }
+terms = { path = "../terms" }
+share = { path = "../share" }
+webrtc = { path = "../webrtc" }
+platform = { path = "../platform" }
+sound = { path = "../sound" }
+errands = { path = "../errands" }
+portrait = { path = "../portrait" }
+screens = { path = "../screens" }
+words = { path = "../words" }
+choices = { path = "../choices" }
+proto.workspace = true
+rpassword = "7.5.5"
+tokio = { workspace = true, features = ["rt", "macros", "signal", "sync", "time"] }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+image = { workspace = true, features = ["png"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net"] }
+keyring-core.workspace = true
+testserver = { path = "../testserver" }
+
+[lints]
+workspace = true

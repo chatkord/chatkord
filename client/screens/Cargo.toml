@@ -1,0 +1,35 @@
+[package]
+name = "screens"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "What each screen of the client decides, as values in and effects out; no toolkit, no OS"
+
+[features]
+# `harness`: the fixtures the screens' tests build their windows from, for the shell's tests too.
+testing = []
+
+[dependencies]
+report.workspace = true
+terms = { path = "../terms" }
+net = { path = "../net" }
+words = { path = "../words" }
+choices = { path = "../choices" }
+chat = { path = "../chat" }
+proto.workspace = true
+design = { path = "../design" }
+# About Chatkord's notices, as the package carries them.
+notices = { path = "../notices" }
+# Grapheme clusters, so an initial is a whole letter with its accent or a whole emoji, never half of one; the latest release.
+unicode-segmentation = "1.13.3"
+
+[dev-dependencies]
+# The fuzz target's corpus.
+proto = { workspace = true, features = ["testing"] }
+words = { path = "../words", features = ["english"] }
+# Reads back the notes the voice settings write.
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+
+[lints]
+workspace = true

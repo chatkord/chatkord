@@ -1,0 +1,72 @@
+name: audit
+
+on:
+  schedule:
+    # Mondays at 05:17 -- a week's gap between scans, an hour off the top of the morning so a fleet of
+    # forks does not start at the same minute.
+    - cron: "17 5 * * 1"
+  # A lockfile is the only thing in a commit that changes what this scan says about the tree.
+  push:
+    paths: ["**/Cargo.lock", "deny.toml", ".github/workflows/audit.yml", "scripts/deps/released.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Every workspace: each tracked Cargo.lock's directory.
+  workspaces:
+    runs-on: ubuntu-latest
+    outputs:
+      manifests: ${{ steps.list.outputs.manifests }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - id: list
+        run: |
+          manifests=$(git ls-files -- '*Cargo.lock' | sed 's|Cargo.lock$|Cargo.toml|' | jq -Rnc '[inputs]')
+          echo "manifests=$manifests" >> "$GITHUB_OUTPUT"
+
+  deny:
+    needs: workspaces
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        manifest: ${{ fromJSON(needs.workspaces.outputs.manifests) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      # Both client manifests patch the pinned engine crates to the unpacked source under
+      # build/deps-src/webrtc, so cargo cannot read their graph before that unpack exists.
+      - if: startsWith(matrix.manifest, 'client/')
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/deps-src/webrtc/download
+          key: audit-webrtc-${{ hashFiles('scripts/deps/webrtc.sh', 'patches/webrtc/*.patch') }}
+      - if: startsWith(matrix.manifest, 'client/')
+        run: ./scripts/deps/webrtc.sh
+      - uses: EmbarkStudios/cargo-deny-action@70f81531115945ba6eb6b941ec9d39d063438eb9 # v2.1.2
+        with:
+          manifest-path: ${{ matrix.manifest }}
+          command: check
+          arguments: --config deny.toml
+
+  # A git pin whose retiring release is out: retiring it is then a deliberate commit. It reads
+  # each manifest's own metadata, which needs no engine unpacked; the locks are update.yml's.
+  released:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - run: python3 scripts/deps/released.py

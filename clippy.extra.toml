@@ -1,0 +1,10 @@
+# A colour reaches a widget through `ui::color` and nowhere else, so a view cannot paint a literal; a redraw is asked
+# through `Asking` alone, so what it must lay out again is never forgotten.
+disallowed-methods = [
+    { path = "iced_core::color::Color::from_rgb", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_rgba", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_rgb8", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_rgba8", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_linear_rgba", reason = "a colour is a design role: use ui::color" },
+    { path = "winit::window::Window::request_redraw", reason = "a redraw is asked whole or for a picture: use asks::Asking" },
+]

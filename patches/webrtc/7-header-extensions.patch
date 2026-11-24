@@ -1,0 +1,130 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <noreply@example.invalid>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] header-extensions: a transceiver's offered header extensions,
+ settable
+
+LiveKit's RtpTransceiver had no way to choose which RTP header
+extensions a section offers, though webrtc-sys binds libwebrtc's
+HeaderExtensionsToNegotiate and SetHeaderExtensionsToNegotiate.
+Measured: an AV1 share sent no dependency descriptor, the only mark by
+which mediasoup's AV1 payload descriptor sees a key frame, so the
+server asked again after KeyFrameRetransmissionWaitMs and each join of
+an AV1 share cost its sharer a second key frame (the call e2e test
+a_held_watch_taken_again_costs_its_sharer_one_key_frame_and_no_reopen
+counted two).
+
+Both are exposed on libwebrtc::RtpTransceiver; the capability keeps its
+preferred id and encryption so a list read can be written back.
+
+diff --git a/libwebrtc/src/native/rtp_parameters.rs b/libwebrtc/src/native/rtp_parameters.rs
+index fab5241..45cd6d6 100644
+--- a/libwebrtc/src/native/rtp_parameters.rs
++++ b/libwebrtc/src/native/rtp_parameters.rs
+@@ -137,7 +137,24 @@ impl From<sys_rp::ffi::RtpCodecCapability> for RtpCodecCapability {
+ 
+ impl From<sys_rp::ffi::RtpHeaderExtensionCapability> for RtpHeaderExtensionCapability {
+     fn from(value: sys_rp::ffi::RtpHeaderExtensionCapability) -> Self {
+-        Self { direction: value.direction.into(), uri: value.uri }
++        Self {
++            direction: value.direction.into(),
++            uri: value.uri,
++            preferred_id: value.has_preferred_id.then_some(value.preferred_id),
++            preferred_encrypt: value.preferred_encrypt,
++        }
++    }
++}
++
++impl From<RtpHeaderExtensionCapability> for sys_rp::ffi::RtpHeaderExtensionCapability {
++    fn from(value: RtpHeaderExtensionCapability) -> Self {
++        Self {
++            uri: value.uri,
++            has_preferred_id: value.preferred_id.is_some(),
++            preferred_id: value.preferred_id.unwrap_or_default(),
++            preferred_encrypt: value.preferred_encrypt,
++            direction: value.direction.into(),
++        }
+     }
+ }
+ 
+diff --git a/libwebrtc/src/native/rtp_transceiver.rs b/libwebrtc/src/native/rtp_transceiver.rs
+index 3bd4fb5..f2e5343 100644
+--- a/libwebrtc/src/native/rtp_transceiver.rs
++++ b/libwebrtc/src/native/rtp_transceiver.rs
+@@ -17,7 +17,7 @@ use webrtc_sys::{rtc_error as sys_err, rtp_transceiver as sys_rt, webrtc as sys_
+ 
+ use crate::{
+     imp::{rtp_receiver::RtpReceiver, rtp_sender::RtpSender},
+-    rtp_parameters::RtpCodecCapability,
++    rtp_parameters::{RtpCodecCapability, RtpHeaderExtensionCapability},
+     rtp_receiver, rtp_sender,
+     rtp_transceiver::{RtpTransceiverDirection, RtpTransceiverInit},
+     RtcError,
+@@ -92,6 +92,19 @@ impl RtpTransceiver {
+             .map_err(|e| unsafe { sys_err::ffi::RtcError::from(e.what()).into() })
+     }
+ 
++    pub fn header_extensions_to_negotiate(&self) -> Vec<RtpHeaderExtensionCapability> {
++        self.sys_handle.header_extensions_to_negotiate().into_iter().map(Into::into).collect()
++    }
++
++    pub fn set_header_extensions_to_negotiate(
++        &self,
++        extensions: Vec<RtpHeaderExtensionCapability>,
++    ) -> Result<(), RtcError> {
++        self.sys_handle
++            .set_header_extensions_to_negotiate(extensions.into_iter().map(Into::into).collect())
++            .map_err(|e| unsafe { sys_err::ffi::RtcError::from(e.what()).into() })
++    }
++
+     pub fn stop(&self) -> Result<(), RtcError> {
+         self.sys_handle
+             .stop_standard()
+diff --git a/libwebrtc/src/rtp_parameters.rs b/libwebrtc/src/rtp_parameters.rs
+index a45d6ce..4e6ee2c 100644
+--- a/libwebrtc/src/rtp_parameters.rs
++++ b/libwebrtc/src/rtp_parameters.rs
+@@ -155,6 +155,9 @@ pub struct RtpCodecCapability {
+ #[derive(Debug, Clone)]
+ pub struct RtpHeaderExtensionCapability {
+     pub uri: String,
++    /// The id this endpoint would like the extension to have, if it has a preference.
++    pub preferred_id: Option<i32>,
++    pub preferred_encrypt: bool,
+     pub direction: RtpTransceiverDirection,
+ }
+ 
+diff --git a/libwebrtc/src/rtp_transceiver.rs b/libwebrtc/src/rtp_transceiver.rs
+index 00a7a91..9a62a96 100644
+--- a/libwebrtc/src/rtp_transceiver.rs
++++ b/libwebrtc/src/rtp_transceiver.rs
+@@ -16,7 +16,7 @@ use std::fmt::Debug;
+ 
+ use crate::{
+     imp::rtp_transceiver as imp_rt,
+-    rtp_parameters::{RtpCodecCapability, RtpEncodingParameters},
++    rtp_parameters::{RtpCodecCapability, RtpEncodingParameters, RtpHeaderExtensionCapability},
+     rtp_receiver::RtpReceiver,
+     rtp_sender::RtpSender,
+     RtcError,
+@@ -68,6 +68,20 @@ impl RtpTransceiver {
+         self.handle.set_codec_preferences(codecs)
+     }
+ 
++    /// The header extensions this transceiver would offer, in the order libwebrtc keeps them, each with its direction.
++    pub fn header_extensions_to_negotiate(&self) -> Vec<RtpHeaderExtensionCapability> {
++        self.handle.header_extensions_to_negotiate()
++    }
++
++    /// Replaces the directions of the header extensions this transceiver would offer; `extensions` is the list
++    /// [`Self::header_extensions_to_negotiate`] returned, in its order, with directions changed.
++    pub fn set_header_extensions_to_negotiate(
++        &self,
++        extensions: Vec<RtpHeaderExtensionCapability>,
++    ) -> Result<(), RtcError> {
++        self.handle.set_header_extensions_to_negotiate(extensions)
++    }
++
+     pub fn stop(&self) -> Result<(), RtcError> {
+         self.handle.stop()
+     }

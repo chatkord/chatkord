@@ -1,0 +1,10 @@
+# The Python tools the Windows FFmpeg build installs, each wheel checked by its digest. A bump is the version here, then
+# `scripts/deps/python-tools.sh --lock`.
+meson==1.12.0 \
+    --hash=sha256:71f133147fa0fcfe8f4df49fa1045771064947834538409e5d97b3613aac8b4e
+ninja==1.13.2 \
+    --hash=sha256:1293f4078278b70d0ee4b6cc8f3a9e030656c9b2f59909970343c4fe76070118 \
+    --hash=sha256:65a24341b5ac09fcadcc37082660be40a94174e51a937fabf6e2cae26225fa2c
+cmake==4.4.5 ; sys_platform == "win32" \
+    --hash=sha256:85625a9b6d5e88ff99c7eb79123d85570844e77ac076366cf75c609cc0b1b579 \
+    --hash=sha256:d5521b4a9e864505c550abae99ff593d501bd08225583e69b3a9a4ca7f36a03f

@@ -1,0 +1,26 @@
+From 23104bbb4b511c860aa1f048c0e92bfd2ab06a83 Mon Sep 17 00:00:00 2001
+From: Chatkord <chatkord@example.invalid>
+Subject: [PATCH 4/4] avcodec/vulkan_encode_av1: pass no segmentation
+ parameters
+
+Vulkan's AV1 encode takes no segmentation parameters
+(VUID-vkCmdEncodeVideoKHR-pStdPictureInfo-10350), and segmentation is
+never enabled here, but pSegmentation pointed at a zeroed set of them.
+---
+ libavcodec/vulkan_encode_av1.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/vulkan_encode_av1.c b/libavcodec/vulkan_encode_av1.c
+index f2182b5..8877269 100644
+--- a/libavcodec/vulkan_encode_av1.c
++++ b/libavcodec/vulkan_encode_av1.c
+@@ -337,7 +337,8 @@ static int init_pic_params(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+ 
+ //        .pTileInfo = tile_info, TODO FIX
+         .pQuantization = quantization,
+-        .pSegmentation = segmentation,
++        /* Segmentation is never enabled, and Vulkan's AV1 encode takes none (VUID-10350) */
++        .pSegmentation = NULL,
+         .pLoopFilter = loop_filter,
+         .pCDEF = cdef,
+         .pLoopRestoration = loop_restoration,

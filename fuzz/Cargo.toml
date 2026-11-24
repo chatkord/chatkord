@@ -1,0 +1,137 @@
+# The fuzz targets: one binary per parser an untrusted peer feeds, each calling the entry
+# its owner keeps in a `fuzz` module, where the replay test of the corpus reads the same function. Run by
+# `mise run fuzz`; the gate lints them and replays the corpus in the owners' own tests.
+[package]
+name = "fuzz"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# cargo-fuzz's own runtime, its latest release: libFuzzer, built from its source (NCSA, allowed in deny.toml).
+libfuzzer-sys = "0.4.13"
+proto = { path = "../protocol/proto", features = ["testing"] }
+rtc = { path = "../client/rtc" }
+fetch = { path = "../client/fetch" }
+terms = { path = "../client/terms" }
+update = { path = "../client/update" }
+screens = { path = "../client/screens" }
+media = { path = "../client/media" }
+
+[workspace]
+members = ["."]
+
+# The protocol's lints, restated: cargo shares no table across workspaces, and `gate:lints` holds every copy equal.
+[workspace.lints.rust]
+missing_docs = "warn"
+unnameable_types = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+unsafe_op_in_unsafe_fn = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+undocumented_unsafe_blocks = "warn"
+allow_attributes_without_reason = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+dbg_macro = "warn"
+exit = "warn"
+mem_forget = "warn"
+large_futures = "warn"
+large_stack_arrays = "warn"
+unnecessary_safety_comment = "warn"
+string_slice = "warn"
+needless_pass_by_value = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+borrow_as_ptr = "warn"
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+as_ptr_cast_mut = "warn"
+multiple_unsafe_ops_per_block = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+cast_lossless = "warn"
+allow_attributes = "warn"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "sdp_from_server"
+path = "fuzz_targets/sdp_from_server.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "preview_scan"
+path = "fuzz_targets/preview_scan.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "consumer_from_server"
+path = "fuzz_targets/consumer_from_server.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ice_from_server"
+path = "fuzz_targets/ice_from_server.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "router_from_server"
+path = "fuzz_targets/router_from_server.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "invite_link"
+path = "fuzz_targets/invite_link.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "typed_address"
+path = "fuzz_targets/typed_address.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "feed_address"
+path = "fuzz_targets/feed_address.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "event_into_place"
+path = "fuzz_targets/event_into_place.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_bitstream"
+path = "fuzz_targets/decode_bitstream.rs"
+test = false
+doc = false
+bench = false

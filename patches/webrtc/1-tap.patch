@@ -1,0 +1,428 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <noreply@example.invalid>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] tap: lend the host each received frame's bytes, and decode in
+ the host
+
+The crate decodes a received frame itself and cannot hand its bytes out or decode on VA-API.
+Measured: on Machine B a 4K60 stream decodes at 3.8 ms a picture on the GPU, against about
+30 ms in the engine's software decoder.
+
+The engine's own encoded sink (AddEncodedSink) lends the host each frame the frame buffer
+releases, in decode order and never past a lost reference. Stand-in H.264 and AV1 decoders
+sit in the engine for the frame buffer to feed; the host asks for a key frame. The stand-in
+is process-wide (decode_in_host).
+
+diff --git a/libwebrtc/src/lib.rs b/libwebrtc/src/lib.rs
+index 9f779e2..dd5017d 100644
+--- a/libwebrtc/src/lib.rs
++++ b/libwebrtc/src/lib.rs
+@@ -72,7 +72,8 @@ pub mod native {
+     pub use webrtc_sys::webrtc::ffi::create_random_uuid;
+ 
+     pub use crate::imp::{
+-        apm, audio_mixer, audio_resampler, frame_cryptor, packet_trailer, yuv_helper,
++        apm, audio_mixer, audio_resampler, encoded_frame_tap, frame_cryptor, packet_trailer,
++        yuv_helper,
+     };
+ }
+ 
+diff --git a/libwebrtc/src/native/encoded_frame_tap.rs b/libwebrtc/src/native/encoded_frame_tap.rs
+new file mode 100644
+index 0000000..d278ace
+--- /dev/null
++++ b/libwebrtc/src/native/encoded_frame_tap.rs
+@@ -0,0 +1,49 @@
++// Added by Chatkord (patches/webrtc).
++
++//! The encoded video frames of a remote track, shown to the host as the engine's frame buffer releases them.
++//!
++//! The pinned crate decodes a received frame itself and offers no way to read its bytes or to decode
++//! it elsewhere. A tap lets the host see each frame the engine would decode, in decode order and never past
++//! a lost reference, so the engine's feedback, jitter buffer and timing are the host's picture's. [`decode_in_host`] turns the engine's own
++//! H.264 and AV1 decoders into stand-ins, so the host's decoder is the only real one.
++
++use cxx::SharedPtr;
++use webrtc_sys::encoded_frame_tap::{self as sys, ffi as sys_tap};
++
++use crate::rtp_receiver::RtpReceiver;
++
++/// One frame the frame buffer released, borrowed for the length of the callback.
++#[derive(Debug, Clone, Copy)]
++pub struct EncodedFrame<'a> {
++    /// The codec's byte stream for the frame (Annex B for H.264, with the parameter sets a key frame needs; OBUs for AV1).
++    pub data: &'a [u8],
++    /// When the engine's timing says it is shown, in microseconds of its clock.
++    pub render_time_us: i64,
++    pub key_frame: bool,
++}
++
++/// Keeps showing a receiver's frames to the host; dropping it stops the callback.
++pub struct EncodedFrameTap {
++    sys_handle: SharedPtr<sys_tap::EncodedFrameTap>,
++}
++
++impl EncodedFrameTap {
++    /// Calls `on_frame` for every frame the receiver's frame buffer releases, on an engine thread: copy and return.
++    pub fn new(receiver: &RtpReceiver, on_frame: impl Fn(EncodedFrame<'_>) + Send + Sync + 'static) -> Self {
++        let observer = sys::EncodedFrameObserver::new(Box::new(move |data, render_time_us, key_frame| {
++            on_frame(EncodedFrame { data, render_time_us, key_frame });
++        }));
++        Self { sys_handle: sys_tap::new_encoded_frame_tap(receiver.handle.sys_handle.clone(), Box::new(observer)) }
++    }
++
++    /// Asks the sender for a key frame, for when the host's decoder lost its place.
++    pub fn request_key_frame(&self) {
++        self.sys_handle.request_key_frame();
++    }
++}
++
++/// Makes the engine's H.264 and AV1 decoders stand-ins that produce a placeholder picture, for every receiver
++/// created from now on. Without a tap on the receiver nothing would decode its frames.
++pub fn decode_in_host(on: bool) {
++    sys_tap::set_host_decodes(on);
++}
+diff --git a/libwebrtc/src/native/mod.rs b/libwebrtc/src/native/mod.rs
+index de56e33..233ca0f 100644
+--- a/libwebrtc/src/native/mod.rs
++++ b/libwebrtc/src/native/mod.rs
+@@ -23,6 +23,7 @@ pub mod audio_track;
+ pub mod data_channel;
+ #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+ pub mod desktop_capturer;
++pub mod encoded_frame_tap;
+ pub mod frame_cryptor;
+ pub mod ice_candidate;
+ pub mod media_stream;
+diff --git a/webrtc-sys/build.rs b/webrtc-sys/build.rs
+index 3791253..7aa713f 100644
+--- a/webrtc-sys/build.rs
++++ b/webrtc-sys/build.rs
+@@ -56,6 +56,7 @@ fn main() {
+         "src/apm.rs",
+         "src/audio_mixer.rs",
+         "src/packet_trailer.rs",
++        "src/encoded_frame_tap.rs",
+     ];
+ 
+     if is_desktop {
+@@ -92,6 +93,7 @@ fn main() {
+         "src/adm_proxy.cpp",
+         "src/audio_resampler.cpp",
+         "src/frame_cryptor.cpp",
++        "src/encoded_frame_tap.cpp",
+         "src/global_task_queue.cpp",
+         "src/prohibit_libsrtp_initialization.cpp",
+         "src/apm.cpp",
+diff --git a/webrtc-sys/include/livekit/encoded_frame_tap.h b/webrtc-sys/include/livekit/encoded_frame_tap.h
+new file mode 100644
+index 0000000..5664e6b
+--- /dev/null
++++ b/webrtc-sys/include/livekit/encoded_frame_tap.h
+@@ -0,0 +1,50 @@
++/*
++ * Hands the encoded video frames of a remote track to the host as the engine's frame buffer releases them.
++ *
++ * Added by Chatkord (patches/webrtc): the pinned crate has no way to read a received frame's bytes
++ * or to decode them elsewhere. The engine's encoded sink hands over each frame it would decode, in
++ * decode order and never past a lost reference, so its feedback, jitter buffer, timing and key-frame
++ * asks are the host's picture's; with `set_host_decodes` the engine's own H.264 and AV1 decoders are
++ * stand-ins that produce a placeholder picture, so the host's decoder is the only real one.
++ */
++
++#pragma once
++
++#include <memory>
++
++#include "api/rtp_receiver_interface.h"
++#include "api/scoped_refptr.h"
++#include "livekit/rtp_receiver.h"
++#include "rust/cxx.h"
++
++namespace livekit_ffi {
++class EncodedFrameTap;
++class EncodedFrameSink;
++}  // namespace livekit_ffi
++#include "webrtc-sys/src/encoded_frame_tap.rs.h"
++
++namespace livekit_ffi {
++
++class EncodedFrameTap {
++ public:
++  EncodedFrameTap(webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
++                  rust::Box<EncodedFrameObserver> observer);
++  ~EncodedFrameTap();
++
++  /// Asks the sender for a key frame (a PLI), for when the host's decoder lost its place.
++  void request_key_frame() const;
++
++ private:
++  webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver_;
++  std::unique_ptr<EncodedFrameSink> sink_;
++};
++
++std::shared_ptr<EncodedFrameTap> new_encoded_frame_tap(
++    std::shared_ptr<RtpReceiver> receiver,
++    rust::Box<EncodedFrameObserver> observer);
++
++/// Whether the engine's H.264 and AV1 decoders are stand-ins because the host decodes. Read by the decoder factory.
++bool host_decodes();
++void set_host_decodes(bool on);
++
++}  // namespace livekit_ffi
+diff --git a/webrtc-sys/src/encoded_frame_tap.cpp b/webrtc-sys/src/encoded_frame_tap.cpp
+new file mode 100644
+index 0000000..4583762
+--- /dev/null
++++ b/webrtc-sys/src/encoded_frame_tap.cpp
+@@ -0,0 +1,95 @@
++/*
++ * See include/livekit/encoded_frame_tap.h. Added by Chatkord (patches/webrtc).
++ */
++
++#include "livekit/encoded_frame_tap.h"
++
++#include <atomic>
++#include <optional>
++#include <utility>
++
++#include "api/video/recordable_encoded_frame.h"
++#include "api/video/video_sink_interface.h"
++#include "api/media_stream_interface.h"
++#include "rtc_base/synchronization/mutex.h"
++
++namespace livekit_ffi {
++
++namespace {
++std::atomic<bool> g_host_decodes{false};
++}  // namespace
++
++bool host_decodes() { return g_host_decodes.load(); }
++void set_host_decodes(bool on) { g_host_decodes.store(on); }
++
++/// Shows the host each frame the receive stream's frame buffer releases, in decode order, whole and with every
++/// frame it references before it. The callback runs on the engine's decode queue under `mutex_`, so it must copy and
++/// return; `detach` clears it under the same lock, so the host never sees a frame after the tap is gone.
++class EncodedFrameSink
++    : public webrtc::VideoSinkInterface<webrtc::RecordableEncodedFrame> {
++ public:
++  explicit EncodedFrameSink(rust::Box<EncodedFrameObserver> observer)
++      : observer_(std::move(observer)) {}
++
++  void OnFrame(const webrtc::RecordableEncodedFrame& frame) override {
++    webrtc::MutexLock lock(&mutex_);
++    if (!observer_) return;
++    auto buffer = frame.encoded_buffer();
++    if (!buffer) return;
++    (*observer_)->on_frame(
++        rust::Slice<const uint8_t>(buffer->data(), buffer->size()),
++        frame.render_time().us(), frame.is_key_frame());
++  }
++
++  /// Stops showing frames to the host and lets its callback be freed.
++  void detach() {
++    webrtc::MutexLock lock(&mutex_);
++    observer_.reset();
++  }
++
++ private:
++  webrtc::Mutex mutex_;
++  std::optional<rust::Box<EncodedFrameObserver>> observer_;
++};
++
++/// The video source of `receiver`'s track, through which encoded frames are asked for; none for sound.
++webrtc::VideoTrackSourceInterface* video_source(
++    const webrtc::scoped_refptr<webrtc::RtpReceiverInterface>& receiver) {
++  auto track = receiver->track();
++  if (!track || track->kind() != webrtc::MediaStreamTrackInterface::kVideoKind) {
++    return nullptr;
++  }
++  return static_cast<webrtc::VideoTrackInterface*>(track.get())->GetSource();
++}
++
++EncodedFrameTap::EncodedFrameTap(
++    webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
++    rust::Box<EncodedFrameObserver> observer)
++    : receiver_(std::move(receiver)),
++      sink_(std::make_unique<EncodedFrameSink>(std::move(observer))) {
++  if (auto* source = video_source(receiver_)) {
++    source->AddEncodedSink(sink_.get());
++  }
++}
++
++EncodedFrameTap::~EncodedFrameTap() {
++  if (auto* source = video_source(receiver_)) {
++    source->RemoveEncodedSink(sink_.get());
++  }
++  sink_->detach();
++}
++
++void EncodedFrameTap::request_key_frame() const {
++  if (auto* source = video_source(receiver_)) {
++    source->GenerateKeyFrame();
++  }
++}
++
++std::shared_ptr<EncodedFrameTap> new_encoded_frame_tap(
++    std::shared_ptr<RtpReceiver> receiver,
++    rust::Box<EncodedFrameObserver> observer) {
++  return std::make_shared<EncodedFrameTap>(receiver->rtc_receiver(),
++                                           std::move(observer));
++}
++
++}  // namespace livekit_ffi
+diff --git a/webrtc-sys/src/encoded_frame_tap.rs b/webrtc-sys/src/encoded_frame_tap.rs
+new file mode 100644
+index 0000000..bc715b9
+--- /dev/null
++++ b/webrtc-sys/src/encoded_frame_tap.rs
+@@ -0,0 +1,56 @@
++// Added by Chatkord (patches/webrtc). See include/livekit/encoded_frame_tap.h.
++
++use crate::impl_thread_safety;
++
++/// Called for each video frame the frame buffer releases, on an engine thread. Copy and return.
++pub type OnEncodedFrame = Box<dyn Fn(&[u8], i64, bool) + Send + Sync + 'static>;
++
++#[cxx::bridge(namespace = "livekit_ffi")]
++pub mod ffi {
++    unsafe extern "C++" {
++        include!("livekit/encoded_frame_tap.h");
++        include!("livekit/rtp_receiver.h");
++
++        type RtpReceiver = crate::rtp_receiver::ffi::RtpReceiver;
++
++        /// Shows the host a remote track's encoded frames as the engine's frame buffer releases them.
++        pub type EncodedFrameTap;
++
++        fn request_key_frame(self: &EncodedFrameTap);
++
++        fn new_encoded_frame_tap(
++            receiver: SharedPtr<RtpReceiver>,
++            observer: Box<EncodedFrameObserver>,
++        ) -> SharedPtr<EncodedFrameTap>;
++
++        /// The engine's H.264 and AV1 decoders become stand-ins producing a placeholder picture.
++        fn set_host_decodes(on: bool);
++    }
++
++    extern "Rust" {
++        type EncodedFrameObserver;
++
++        fn on_frame(
++            self: &EncodedFrameObserver,
++            data: &[u8],
++            render_time_us: i64,
++            key_frame: bool,
++        );
++    }
++}
++
++impl_thread_safety!(ffi::EncodedFrameTap, Send + Sync);
++
++pub struct EncodedFrameObserver {
++    observer: OnEncodedFrame,
++}
++
++impl EncodedFrameObserver {
++    pub fn new(observer: OnEncodedFrame) -> Self {
++        Self { observer }
++    }
++
++    fn on_frame(&self, data: &[u8], render_time_us: i64, key_frame: bool) {
++        (self.observer)(data, render_time_us, key_frame);
++    }
++}
+diff --git a/webrtc-sys/src/lib.rs b/webrtc-sys/src/lib.rs
+index d33322f..35c38fa 100644
+--- a/webrtc-sys/src/lib.rs
++++ b/webrtc-sys/src/lib.rs
+@@ -28,6 +28,7 @@ pub mod helper;
+ pub mod jsep;
+ pub mod media_stream;
+ pub mod media_stream_track;
++pub mod encoded_frame_tap;
+ pub mod packet_trailer;
+ pub mod peer_connection;
+ pub mod peer_connection_factory;
+diff --git a/webrtc-sys/src/video_decoder_factory.cpp b/webrtc-sys/src/video_decoder_factory.cpp
+index d22ae70..a9f6a30 100644
+--- a/webrtc-sys/src/video_decoder_factory.cpp
++++ b/webrtc-sys/src/video_decoder_factory.cpp
+@@ -16,6 +16,11 @@
+ 
+ #include "livekit/video_decoder_factory.h"
+ 
++#include "api/video/i420_buffer.h"
++#include "api/video/video_frame.h"
++#include "livekit/encoded_frame_tap.h"
++#include "modules/video_coding/include/video_error_codes.h"
++
+ #include <modules/video_coding/codecs/av1/av1_svc_config.h>
+ #include "api/environment/environment.h"
+ #include "api/video_codecs/av1_profile.h"
+@@ -41,6 +46,43 @@
+ 
+ namespace livekit_ffi {
+ 
++namespace {
++// Chatkord (patches/webrtc): stands in for the engine's H.264 and AV1 decoders when the host decodes the
++// frames the encoded-frame tap hands it, which are the ones the frame buffer gives this decoder. It accepts
++// every frame and answers with a small black picture, so the stream's timing and statistics carry on; a
++// frame lost for good is the frame buffer's to ask a key frame for, a host decoder that failed the host's.
++class StandInDecoder : public webrtc::VideoDecoder {
++ public:
++  bool Configure(const Settings&) override { return true; }
++  int32_t Decode(const webrtc::EncodedImage& input,
++                 bool /* missing_frames */,
++                 int64_t render_time_ms) override {
++    if (!callback_) return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
++    auto buffer = webrtc::I420Buffer::Create(2, 2);
++    webrtc::I420Buffer::SetBlack(buffer.get());
++    webrtc::VideoFrame frame = webrtc::VideoFrame::Builder()
++                                   .set_video_frame_buffer(buffer)
++                                   .set_rtp_timestamp(input.RtpTimestamp())
++                                   .set_timestamp_ms(render_time_ms)
++                                   .build();
++    callback_->Decoded(frame, std::optional<int32_t>(0), std::nullopt);
++    return WEBRTC_VIDEO_CODEC_OK;
++  }
++  int32_t RegisterDecodeCompleteCallback(
++      webrtc::DecodedImageCallback* callback) override {
++    callback_ = callback;
++    return WEBRTC_VIDEO_CODEC_OK;
++  }
++  int32_t Release() override { return WEBRTC_VIDEO_CODEC_OK; }
++  DecoderInfo GetDecoderInfo() const override {
++    return {.implementation_name = "host", .is_hardware_accelerated = true};
++  }
++
++ private:
++  webrtc::DecodedImageCallback* callback_ = nullptr;
++};
++}  // namespace
++
+ namespace {
+ // H264Decoder::IsSupported() only reflects the WEBRTC_USE_H264 build flag;
+ // desktop prebuilts link an FFmpeg without the H.264 codec, which only
+@@ -105,7 +147,7 @@ std::vector<webrtc::SdpVideoFormat> VideoDecoderFactory::GetSupportedFormats()
+   for (const webrtc::SdpVideoFormat& format :
+        webrtc::SupportedVP9DecoderCodecs())
+     formats.push_back(format);
+-  if (internal_h264_decoder_works_) {
++  if (internal_h264_decoder_works_ || host_decodes()) {
+     for (const webrtc::SdpVideoFormat& h264_format :
+          webrtc::SupportedH264DecoderCodecs()) {
+       formats.push_back(h264_format);
+@@ -136,6 +178,11 @@ VideoDecoderFactory::CodecSupport VideoDecoderFactory::QueryCodecSupport(
+ 
+ std::unique_ptr<webrtc::VideoDecoder> VideoDecoderFactory::Create(
+     const webrtc::Environment& env, const webrtc::SdpVideoFormat& format) {
++  if (host_decodes() &&
++      (absl::EqualsIgnoreCase(format.name, webrtc::kH264CodecName) ||
++       absl::EqualsIgnoreCase(format.name, webrtc::kAv1CodecName)))
++    return std::make_unique<StandInDecoder>();
++
+   for (const auto& factory : factories_) {
+     for (const auto& supported_format : factory->GetSupportedFormats()) {
+       if (supported_format.IsSameCodec(format))

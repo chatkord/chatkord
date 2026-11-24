@@ -1,0 +1,57 @@
+[package]
+name = "picture"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "A received screen: its slot, the paint of its planes, the import of a decoder's surface"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wgpu = { version = "30.0.2", default-features = false, features = ["wgsl", "std"] }
+pollster.workspace = true
+# How long a refused import waits before it is offered again.
+net = { path = "../net" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# GL beside Vulkan, for a machine whose only Vulkan cannot run the window's shaders (llvmpipe's).
+wgpu = { version = "30.0.2", default-features = false, features = ["vulkan", "gles"] }
+ash = { workspace = true, features = ["std", "loaded", "debug"] }
+capture = { path = "../capture" }
+media = { path = "../media" }
+# The window's log, told how the learning of which driver serves which GPU ended.
+report.workspace = true
+
+# A picture on the window's own D3D12 device, in the `windows` version wgpu's DX12 backend uses. DirectX 12 alone, which
+# every Windows GPU driver offers: Vulkan beside it was 1,773,056 B of the release window (measured on Machine A).
+[target.'cfg(windows)'.dependencies]
+wgpu = { version = "30.0.2", default-features = false, features = ["dx12"] }
+capture = { path = "../capture" }
+media = { path = "../media" }
+windows = { workspace = true, features = ["Win32_Graphics_Direct3D12"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# For `media`'s test fixture, a VA-API surface standing in for a compositor's buffer, which reaches FFmpeg through
+# `media::av`.
+media = { path = "../media", features = ["testing"] }
+# A test's stand-in compositor puts its fence on a buffer (`DMA_BUF_IOCTL_IMPORT_SYNC_FILE`), as `media` reads one.
+rustix = { workspace = true, features = ["std"] }
+
+# A share beside a game: the scene's video memory (`IDXGIAdapter3`), and the priorities a share's process may take
+# (the D3D11 device's, the process's GPU scheduling class through the driver kit's `D3DKMT`, its priority class).
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = [
+  "Wdk_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Dxgi",
+  "Win32_System_Threading",
+] }
+# The debug layer a test run asks for, and what it reported beyond the known issues, through `testing`
+capture = { path = "../capture", features = ["testing"] }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+
+[lints]
+workspace = true

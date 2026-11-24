@@ -1,0 +1,222 @@
+From 164cb8816005ef727e08be1c45b65d82e38d0859 Mon Sep 17 00:00:00 2001
+From: Chatkord <chatkord@example.invalid>
+Subject: [PATCH 1/4] avcodec/vulkan_encode: set a changed bitrate without a
+ reset
+
+The rate control was set on the session once, with the first frame's
+reset; a change of bit_rate, rc_max_rate or rc_buffer_size made later
+on the codec context was then only chained into vkCmdBeginVideoCodingKHR,
+which must match the state in effect (VUID-08254), and was not applied.
+A change is now set with vkCmdControlVideoCodingKHR carrying the rate
+control alone, which needs no reset and no keyframe, as libx264 does
+with x264_encoder_reconfig. The buffer sizes in milliseconds follow the
+rates, computed once from the session's state rather than per codec.
+
+vkCmdBeginVideoCodingKHR now chains the rate control in effect: none
+before the first reset (the default mode), and the session's own for
+every frame after it, a forced IDR included (VUID-08253).
+---
+ libavcodec/vulkan_encode.c      | 73 +++++++++++++++++++++++++++++----
+ libavcodec/vulkan_encode.h      |  8 ++++
+ libavcodec/vulkan_encode_av1.c  |  3 --
+ libavcodec/vulkan_encode_h264.c |  3 --
+ libavcodec/vulkan_encode_h265.c |  3 --
+ 5 files changed, 74 insertions(+), 16 deletions(-)
+
+diff --git a/libavcodec/vulkan_encode.c b/libavcodec/vulkan_encode.c
+index 9d3c9b0..a7b8f81 100644
+--- a/libavcodec/vulkan_encode.c
++++ b/libavcodec/vulkan_encode.c
+@@ -119,6 +119,33 @@ static int vulkan_encode_free(AVCodecContext *avctx, FFHWBaseEncodePicture *pic)
+     return 0;
+ }
+ 
++/* The rates the codec context asks for now: a missing peak is the average
++ * rate, a missing buffer the peak, as the HRD of each codec takes them. */
++static void rc_asked(AVCodecContext *avctx, int64_t *bit_rate, int64_t *max_rate,
++                     int64_t *buffer_size, int64_t *initial_fullness)
++{
++    *bit_rate = avctx->bit_rate;
++    *max_rate = avctx->rc_max_rate ? avctx->rc_max_rate : avctx->bit_rate;
++    *buffer_size = avctx->rc_buffer_size ? avctx->rc_buffer_size : *max_rate;
++    *initial_fullness = avctx->rc_initial_buffer_occupancy ?
++                        FFMIN(avctx->rc_initial_buffer_occupancy, *buffer_size) :
++                        *buffer_size * 3 / 4;
++}
++
++/* Sets the rates of rc_info and its layer to the session's (ctx->rc_*). */
++static void set_pic_rc_rates(FFVulkanEncodeContext *ctx,
++                             VkVideoEncodeRateControlInfoKHR *rc_info,
++                             VkVideoEncodeRateControlLayerInfoKHR *rc_layer)
++{
++    if (ctx->opts.rc_mode <= VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR)
++        return;
++
++    rc_layer->averageBitrate = ctx->rc_bit_rate;
++    rc_layer->maxBitrate = ctx->rc_max_rate;
++    rc_info->virtualBufferSizeInMs = (ctx->rc_buffer_size * 1000LL) / ctx->rc_bit_rate;
++    rc_info->initialVirtualBufferSizeInMs = (ctx->rc_initial_fullness * 1000LL) / ctx->rc_bit_rate;
++}
++
+ static int init_pic_rc(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+                        VkVideoEncodeRateControlInfoKHR *rc_info,
+                        VkVideoEncodeRateControlLayerInfoKHR *rc_layer /* Goes in ^ */)
+@@ -133,13 +160,12 @@ static int init_pic_rc(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+     if (ctx->opts.rc_mode > VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) {
+         *rc_layer = (VkVideoEncodeRateControlLayerInfoKHR) {
+             .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_RATE_CONTROL_LAYER_INFO_KHR,
+-            .averageBitrate = avctx->bit_rate,
+-            .maxBitrate = avctx->rc_max_rate ? avctx->rc_max_rate : avctx->bit_rate,
+             .frameRateNumerator = avctx->framerate.num,
+             .frameRateDenominator = avctx->framerate.den,
+         };
+         rc_info->layerCount++;
+         rc_info->pLayers = rc_layer;
++        set_pic_rc_rates(ctx, rc_info, rc_layer);
+     }
+ 
+     return ctx->codec->init_pic_rc(avctx, pic, rc_info, rc_layer);
+@@ -173,10 +199,11 @@ static int vulkan_encode_issue(AVCodecContext *avctx,
+         .sType = VK_STRUCTURE_TYPE_VIDEO_END_CODING_INFO_KHR,
+     };
+ 
+-    VkVideoEncodeRateControlLayerInfoKHR rc_layer;
+-    VkVideoEncodeRateControlInfoKHR rc_info;
++    VkVideoEncodeRateControlLayerInfoKHR rc_layer, rc_layer_new;
++    VkVideoEncodeRateControlInfoKHR rc_info, rc_info_new;
+     VkVideoEncodeQualityLevelInfoKHR q_info;
+-    VkVideoCodingControlInfoKHR encode_ctrl;
++    VkVideoCodingControlInfoKHR encode_ctrl, rc_ctrl;
++    int rc_changed = 0;
+ 
+     VkVideoReferenceSlotInfoKHR ref_slot[37];
+     VkVideoEncodeInfoKHR encode_info;
+@@ -195,11 +222,37 @@ static int vulkan_encode_issue(AVCodecContext *avctx,
+ 
+     sd_buf = vp->pkt_buf;
+ 
+-    /* Setup rate control */
++    /* Setup rate control: rc_info is the state the session runs at */
+     err = init_pic_rc(avctx, base_pic, &rc_info, &rc_layer);
+     if (err < 0)
+         return err;
+ 
++    /* Rates the codec context changed since the last frame are set anew,
++     * with no reset and no keyframe. */
++    if (ctx->session_reset &&
++        ctx->opts.rc_mode > VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) {
++        int64_t bit_rate, max_rate, buffer_size, initial_fullness;
++        rc_asked(avctx, &bit_rate, &max_rate, &buffer_size, &initial_fullness);
++        if (bit_rate > 0 &&
++            (bit_rate != ctx->rc_bit_rate || max_rate != ctx->rc_max_rate ||
++             buffer_size != ctx->rc_buffer_size)) {
++            ctx->rc_bit_rate = bit_rate;
++            ctx->rc_max_rate = max_rate;
++            ctx->rc_buffer_size = buffer_size;
++            ctx->rc_initial_fullness = initial_fullness;
++            rc_info_new = rc_info;
++            rc_layer_new = rc_layer;
++            rc_info_new.pLayers = &rc_layer_new;
++            set_pic_rc_rates(ctx, &rc_info_new, &rc_layer_new);
++            rc_ctrl = (VkVideoCodingControlInfoKHR) {
++                .sType = VK_STRUCTURE_TYPE_VIDEO_CODING_CONTROL_INFO_KHR,
++                .pNext = &rc_info_new,
++                .flags = VK_VIDEO_CODING_CONTROL_ENCODE_RATE_CONTROL_BIT_KHR,
++            };
++            rc_changed = 1;
++        }
++    }
++
+     q_info = (VkVideoEncodeQualityLevelInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_QUALITY_LEVEL_INFO_KHR,
+         .pNext = &rc_info,
+@@ -282,7 +335,8 @@ static int vulkan_encode_issue(AVCodecContext *avctx,
+ 
+     encode_start = (VkVideoBeginCodingInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_VIDEO_BEGIN_CODING_INFO_KHR,
+-        .pNext = !base_pic->force_idr ? &rc_info : NULL,
++        /* The rate control in effect: none before the first reset */
++        .pNext = ctx->session_reset ? &rc_info : NULL,
+         .videoSession = ctx->common.session,
+         .videoSessionParameters = ctx->session_params,
+         .referenceSlotCount = encode_info.referenceSlotCount + 1,
+@@ -444,6 +498,8 @@ static int vulkan_encode_issue(AVCodecContext *avctx,
+     if (!ctx->session_reset) {
+         vk->CmdControlVideoCodingKHR(cmd_buf, &encode_ctrl);
+         ctx->session_reset++;
++    } else if (rc_changed) {
++        vk->CmdControlVideoCodingKHR(cmd_buf, &rc_ctrl);
+     }
+ 
+     /* Encode */
+@@ -963,6 +1019,9 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
+     if (err < 0)
+         return err;
+ 
++    rc_asked(avctx, &ctx->rc_bit_rate, &ctx->rc_max_rate,
++             &ctx->rc_buffer_size, &ctx->rc_initial_fullness);
++
+     /* Create command and query pool */
+     query_create = (VkQueryPoolVideoEncodeFeedbackCreateInfoKHR) {
+         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_VIDEO_ENCODE_FEEDBACK_CREATE_INFO_KHR,
+diff --git a/libavcodec/vulkan_encode.h b/libavcodec/vulkan_encode.h
+index f55ba26..8fc006b 100644
+--- a/libavcodec/vulkan_encode.h
++++ b/libavcodec/vulkan_encode.h
+@@ -175,6 +175,14 @@ typedef struct FFVulkanEncodeContext {
+     int explicit_qp;
+     int session_reset;
+ 
++    /* Rate control as last set on the session, in bits per second and bits.
++     * A change of the codec context's rates between frames is set on the
++     * session anew, without a reset or a keyframe. */
++    int64_t rc_bit_rate;
++    int64_t rc_max_rate;
++    int64_t rc_buffer_size;
++    int64_t rc_initial_fullness;
++
+     /* Session parameters object, initialized by each codec independently
+      * and set here. */
+     VkVideoSessionParametersKHR session_params;
+diff --git a/libavcodec/vulkan_encode_av1.c b/libavcodec/vulkan_encode_av1.c
+index 67d81d1..3f32405 100644
+--- a/libavcodec/vulkan_encode_av1.c
++++ b/libavcodec/vulkan_encode_av1.c
+@@ -134,9 +134,6 @@ static int init_pic_rc(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+     rc_info->pNext = &ap->vkrc_info;
+ 
+     if (rc_info->rateControlMode > VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) {
+-        rc_info->virtualBufferSizeInMs = (enc->hrd_buffer_size * 1000LL) / avctx->bit_rate;
+-        rc_info->initialVirtualBufferSizeInMs = (enc->initial_buffer_fullness * 1000LL) / avctx->bit_rate;
+-
+         ap->vkrc_layer_info = (VkVideoEncodeAV1RateControlLayerInfoKHR) {
+             .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_RATE_CONTROL_LAYER_INFO_KHR,
+ 
+diff --git a/libavcodec/vulkan_encode_h264.c b/libavcodec/vulkan_encode_h264.c
+index cdc1bd8..9150b3a 100644
+--- a/libavcodec/vulkan_encode_h264.c
++++ b/libavcodec/vulkan_encode_h264.c
+@@ -134,9 +134,6 @@ static int init_pic_rc(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+     rc_info->pNext = &hp->vkrc_info;
+ 
+     if (rc_info->rateControlMode > VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) {
+-        rc_info->virtualBufferSizeInMs = (enc->unit_opts.hrd_buffer_size * 1000LL) / avctx->bit_rate;
+-        rc_info->initialVirtualBufferSizeInMs = (enc->unit_opts.initial_buffer_fullness * 1000LL) / avctx->bit_rate;
+-
+         hp->vkrc_layer_info = (VkVideoEncodeH264RateControlLayerInfoKHR) {
+             .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_RATE_CONTROL_LAYER_INFO_KHR,
+ 
+diff --git a/libavcodec/vulkan_encode_h265.c b/libavcodec/vulkan_encode_h265.c
+index 6ca46ac..ee32b81 100644
+--- a/libavcodec/vulkan_encode_h265.c
++++ b/libavcodec/vulkan_encode_h265.c
+@@ -128,9 +128,6 @@ static int init_pic_rc(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+     rc_info->pNext = &hp->vkrc_info;
+ 
+     if (rc_info->rateControlMode > VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR) {
+-        rc_info->virtualBufferSizeInMs = (enc->hrd_buffer_size * 1000LL) / avctx->bit_rate;
+-        rc_info->initialVirtualBufferSizeInMs = (enc->initial_buffer_fullness * 1000LL) / avctx->bit_rate;
+-
+         hp->vkrc_layer_info = (VkVideoEncodeH265RateControlLayerInfoKHR) {
+             .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_RATE_CONTROL_LAYER_INFO_KHR,
+ 

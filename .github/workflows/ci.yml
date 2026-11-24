@@ -1,0 +1,203 @@
+name: gate
+
+# CI as tiers: checks that build nothing, then each workspace a pull request reaches, linted and
+# tested on Linux in the builder image and on Windows, and one `conclusion` the ruleset requires. The local gate runs
+# before every push, so CI proves a change once, where it reaches main; a prose-only pull request is covered by the local
+# gate's link check. main.yml releases only a tree this gate passed, these paths aside (scripts/ci/gated.py reads them
+# from here).
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  # Every workspace with cold caches on the 1st of every month, the day the Actions quota resets: the one run that
+  # saves the caches the pull requests restore, and re-proves what a pull request's selection left out.
+  schedule:
+    - cron: "43 4 1 * *"
+  workflow_dispatch:
+
+# A newer push to the same pull request stops its older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Assertions, `-D warnings` clippy and the tests do not depend on debug info, and a runner's disk does not hold a
+  # debug tree of 500 MB binaries; a failing test's backtrace is the maintainer's machine's.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+  # A runner has no GPU, encoder, sound device or PipeWire: the tests of the `ci` tier.
+  NEXTEST_PROFILE: ci
+  # A 4-core, 16 GB runner: three clippy jobs and two test links at about 1.1 GB each.
+  GATE_CHECK_JOBS: "3"
+  GATE_BUILD_JOBS: "2"
+  # The private terms the privacy guard reads; a fork's pull request is given no
+  # secret, so the guard says it did not run them rather than failing.
+  PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
+  PRIVACY_TERMS_UNAVAILABLE: ${{ github.event.pull_request.head.repo.fork && '1' || '' }}
+
+jobs:
+  # Everything that builds nothing: the privacy guard, formatting, links, the lints, dependencies.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Every commit and tag, as a person's own gate sees them.
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+      - run: mise run gate:fast
+
+  # Which workspaces this change reaches (scripts/ci/changes.py); the scheduled and requested runs take all of them.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      workspaces: ${{ steps.reached.outputs.workspaces }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - id: reached
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then reached="$(python3 -I scripts/ci/changes.py "$BASE")"; else reached="$(python3 -I scripts/ci/changes.py --all)"; fi
+          echo "workspaces=$reached" >> "$GITHUB_OUTPUT"
+          echo "reached: ${reached:-none}"
+
+  builder:
+    needs: changes
+    if: needs.changes.outputs.workspaces != ''
+    uses: ./.github/workflows/builder.yml
+    permissions:
+      contents: read
+      packages: write
+
+  # The gate in the builder image, as `scripts/ci/builder.sh run` reproduces it on any machine.
+  linux:
+    needs: [changes, builder]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CHATKORD_CONTAINER: docker
+      GATE_WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+      IMAGE: ${{ needs.builder.outputs.image }}
+      # A fork's pull request is given no token that reads the private server image the client's server tests start.
+      GATE_NO_CONTAINERS: ${{ github.event.pull_request.head.repo.fork && '1' || '' }}
+      # The server repository's test base, which this repository's token reads once the package grants it.
+      CHATKORD_SERVER_BASE: ghcr.io/chatkord/chatkord-server:test-base
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - name: Free the runner's disk
+        run: scripts/ci/free-disk.sh
+      - name: Log in to GHCR and pull the builder
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker pull "$IMAGE"
+          # Pulled here, where the login is: the builder's container has none, and scripts/test-image.sh finds the base held.
+          if [ -z "$GATE_NO_CONTAINERS" ]; then docker pull "$CHATKORD_SERVER_BASE"; fi
+      # Cargo's registry and the builder's target tree, saved only by the scheduled run, so pull requests restore one
+      # warm cache rather than each saving its own.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/builder/cargo-registry
+            build/builder/target
+          key: linux-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: linux-
+      - name: Run the gate in the builder
+        run: |
+          registry="${IMAGE%:*}"
+          CHATKORD_BUILDER="$registry" scripts/ci/builder.sh run mise run gate
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reftest
+          path: build/builder/target/tmp/reftest
+          if-no-files-found: ignore
+      - if: github.event_name == 'schedule' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            build/builder/cargo-registry
+            build/builder/target
+          key: linux-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
+
+  # The same gate on Windows: what Windows can run, naming each stage it leaves to the Linux job. The runner cannot run
+  # Linux containers, so the shaders, the fuzz targets' lint and the client's tests that start a server are the Linux job's.
+  windows:
+    needs: changes
+    if: contains(needs.changes.outputs.workspaces, 'client')
+    runs-on: windows-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      GATE_NO_CONTAINERS: "1"
+      GATE_WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - uses: ./.github/actions/windows-build
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            client/target
+          key: windows-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: windows-
+      - name: Run the gate
+        run: mise run gate
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reftest-windows
+          path: client/target/tmp/reftest
+          if-no-files-found: ignore
+      - if: github.event_name == 'schedule' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            client/target
+          key: windows-${{ hashFiles('**/Cargo.lock', 'rust-toolchain.toml') }}
+
+  # The one check the ruleset requires (.github/rulesets/main.json): every job above passed or was not needed.
+  conclusion:
+    needs: [lint, changes, builder, linux, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "jobs: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in success | skipped) ;; *) echo "FAIL: a job ended $result"; exit 1 ;; esac
+          done

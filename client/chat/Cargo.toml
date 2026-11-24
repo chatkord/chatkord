@@ -1,0 +1,19 @@
+[package]
+name = "chat"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "A channel's messages as the client holds it: its messages, their bodies' styled runs, the rows a list shows, their heights, a draft; no toolkit, no OS"
+
+[dependencies]
+proto.workspace = true
+terms = { path = "../terms" }
+# A message's day and time where the person is, through their time zone's rules at that instant; the latest release.
+jiff = { workspace = true, features = ["std"] }
+# Which graphemes are Unicode's emoji, to draw each in the emoji font, and their shortcodes, names, groups and skin
+# tones for the picker and `:` completion; O(1) lookups in generated tables, its one dependency phf; MIT or
+# Apache-2.0 with the Unicode-3.0 data, the latest release.
+emojis = "0.9.1"
+
+[lints]
+workspace = true

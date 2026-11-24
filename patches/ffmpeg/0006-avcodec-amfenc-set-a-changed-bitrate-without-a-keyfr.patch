@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <chatkord@example.invalid>
+Subject: [PATCH 6/6] avcodec/amfenc: set a changed bitrate without a keyframe
+
+The target and peak bitrates, the VBV buffer and the maximum access unit
+size were set once, at init, so a change of bit_rate, rc_max_rate,
+rc_buffer_size or the max_au_size option made later was ignored. They
+are dynamic properties of the encoder: a change is now set on it before
+the next frame is submitted, as each codec's init sets them, with no
+reinit and no keyframe. av1_amf gains the max_au_size option H.264 and
+HEVC have, mapped to its maximum compressed frame size.
+
+A raised VBV buffer alone does not bound a keyframe: on an RX 9060 XT
+under Windows, h264_amf given a 300 ms buffer for a keyframe asked of a
+1080p60 page of text at 0.045 bits per pixel wrote 27.4 frames' bits
+(457 ms of the rate), at 1080p30 913 ms, and 21.2 frames' with a buffer
+of one frame; enforce_hrd changed none of it.
+---
+--- a/libavcodec/amfenc.c
++++ b/libavcodec/amfenc.c
+@@ -335,6 +335,11 @@
+         ctx->hwsurfaces_in_queue_max = ctx->pa_lookahead_buffer_depth + 1;
+     }
+ 
++    ctx->rc_asked_bit_rate    = avctx->bit_rate;
++    ctx->rc_asked_max_rate    = avctx->rc_max_rate;
++    ctx->rc_asked_buffer_size = avctx->rc_buffer_size;
++    ctx->rc_asked_max_au_size = ctx->max_au_size;
++
+     if ((ret = amf_init_encoder(avctx)) == 0) {
+         return 0;
+     }
+@@ -389,6 +394,71 @@
+     return res;
+ }
+ 
++/* Rates and the access unit bound the codec context changed since the last
++ * frame, set on the encoder as its codec's init sets them: they are dynamic
++ * properties, taken from the next frame on with no keyframe. */
++static int amf_set_changed_rate(AVCodecContext *avctx)
++{
++    AMFEncoderContext *ctx = avctx->priv_data;
++    const wchar_t *target, *peak, *vbv, *max_au;
++    int cbr;
++    AMF_RESULT res;
++
++    if (avctx->bit_rate == ctx->rc_asked_bit_rate &&
++        avctx->rc_max_rate == ctx->rc_asked_max_rate &&
++        avctx->rc_buffer_size == ctx->rc_asked_buffer_size &&
++        ctx->max_au_size == ctx->rc_asked_max_au_size)
++        return 0;
++    ctx->rc_asked_bit_rate    = avctx->bit_rate;
++    ctx->rc_asked_max_rate    = avctx->rc_max_rate;
++    ctx->rc_asked_buffer_size = avctx->rc_buffer_size;
++    ctx->rc_asked_max_au_size = ctx->max_au_size;
++
++    switch (avctx->codec->id) {
++    case AV_CODEC_ID_H264:
++        target = AMF_VIDEO_ENCODER_TARGET_BITRATE;
++        peak   = AMF_VIDEO_ENCODER_PEAK_BITRATE;
++        vbv    = AMF_VIDEO_ENCODER_VBV_BUFFER_SIZE;
++        max_au = AMF_VIDEO_ENCODER_MAX_AU_SIZE;
++        cbr    = ctx->rate_control_mode == AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR;
++        break;
++    case AV_CODEC_ID_HEVC:
++        target = AMF_VIDEO_ENCODER_HEVC_TARGET_BITRATE;
++        peak   = AMF_VIDEO_ENCODER_HEVC_PEAK_BITRATE;
++        vbv    = AMF_VIDEO_ENCODER_HEVC_VBV_BUFFER_SIZE;
++        max_au = AMF_VIDEO_ENCODER_HEVC_MAX_AU_SIZE;
++        cbr    = ctx->rate_control_mode == AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR;
++        break;
++    case AV_CODEC_ID_AV1:
++        target = AMF_VIDEO_ENCODER_AV1_TARGET_BITRATE;
++        peak   = AMF_VIDEO_ENCODER_AV1_PEAK_BITRATE;
++        vbv    = AMF_VIDEO_ENCODER_AV1_VBV_BUFFER_SIZE;
++        max_au = AMF_VIDEO_ENCODER_AV1_MAX_COMPRESSED_FRAME_SIZE;
++        cbr    = ctx->rate_control_mode == AMF_VIDEO_ENCODER_AV1_RATE_CONTROL_METHOD_CBR;
++        break;
++    default:
++        return 0;
++    }
++
++    if (ctx->max_au_size != -1) {
++        AMF_ASSIGN_PROPERTY_INT64(res, ctx->encoder, max_au, ctx->max_au_size);
++        AMF_RETURN_IF_FALSE(ctx, res == AMF_OK, AVERROR_EXTERNAL, "Failed to set the maximum access unit size: %d\n", res);
++    }
++    if (avctx->rc_buffer_size) {
++        AMF_ASSIGN_PROPERTY_INT64(res, ctx->encoder, vbv, avctx->rc_buffer_size);
++        AMF_RETURN_IF_FALSE(ctx, res == AMF_OK, AVERROR_EXTERNAL, "Failed to set the VBV buffer size: %d\n", res);
++    }
++    if (avctx->bit_rate) {
++        AMF_ASSIGN_PROPERTY_INT64(res, ctx->encoder, target, avctx->bit_rate);
++        AMF_RETURN_IF_FALSE(ctx, res == AMF_OK, AVERROR_EXTERNAL, "Failed to set the target bitrate: %d\n", res);
++    }
++    if (avctx->rc_max_rate || (cbr && avctx->bit_rate)) {
++        AMF_ASSIGN_PROPERTY_INT64(res, ctx->encoder, peak, avctx->rc_max_rate ? avctx->rc_max_rate : avctx->bit_rate);
++        AMF_RETURN_IF_FALSE(ctx, res == AMF_OK, AVERROR_EXTERNAL, "Failed to set the peak bitrate: %d\n", res);
++    }
++    return 0;
++}
++
+ static int amf_submit_frame(AVCodecContext *avctx, AVFrame    *frame, AMFSurface **surface_resubmit)
+ {
+     AMFEncoderContext      *ctx = avctx->priv_data;
+@@ -532,6 +602,11 @@
+     default:
+         break;
+     }
++    ret = amf_set_changed_rate(avctx);
++    if (ret < 0) {
++        surface->pVtbl->Release(surface);
++        return ret;
++    }
+     // submit surface
+     res = ctx->encoder->pVtbl->SubmitInput(ctx->encoder, (AMFData*)surface);
+     if (res == AMF_INPUT_FULL) { // handle full queue
+--- a/libavcodec/amfenc.h
++++ b/libavcodec/amfenc.h
+@@ -140,6 +140,13 @@
+     int                 pa_high_motion_quality_boost_mode;
+     int                 pa_adaptive_mini_gop;
+ 
++    // The rates and the access unit bound last asked: a change between frames
++    // is set on the encoder before the next submit, without a keyframe.
++    int64_t             rc_asked_bit_rate;
++    int64_t             rc_asked_max_rate;
++    int64_t             rc_asked_buffer_size;
++    int                 rc_asked_max_au_size;
++
+ 
+ } AMFEncoderContext;
+ 
+--- a/libavcodec/amfenc_av1.c
++++ b/libavcodec/amfenc_av1.c
+@@ -106,6 +106,7 @@
+     { "preencode",              "Enable preencode",     OFFSET(preencode),      AV_OPT_TYPE_BOOL, {.i64 = -1  }, -1, 1, VE},
+     { "enforce_hrd",            "Enforce HRD",          OFFSET(enforce_hrd),    AV_OPT_TYPE_BOOL, {.i64 = -1  }, -1, 1, VE},
+     { "filler_data",            "Filler Data Enable",   OFFSET(filler_data),    AV_OPT_TYPE_BOOL, {.i64 = -1  }, -1, 1, VE},
++    { "max_au_size",            "Maximum compressed frame size for rate control (in bits)", OFFSET(max_au_size), AV_OPT_TYPE_INT, {.i64 = -1 }, -1, INT_MAX, VE },
+ 
+     // B-Frames
+     { "max_b_frames",   "Maximum number of consecutive B Pictures", OFFSET(max_consecutive_b_frames), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 3, VE },
+@@ -386,6 +387,9 @@
+             AMF_ASSIGN_PROPERTY_INT64(res, ctx->encoder, AMF_VIDEO_ENCODER_AV1_INITIAL_VBV_BUFFER_FULLNESS, amf_buffer_fullness);
+         }
+     }
++    if (ctx->max_au_size != -1) {
++        AMF_ASSIGN_PROPERTY_INT64(res, ctx->encoder, AMF_VIDEO_ENCODER_AV1_MAX_COMPRESSED_FRAME_SIZE, ctx->max_au_size);
++    }
+ 
+     // init dynamic rate control params
+     if (ctx->enforce_hrd != -1) {

@@ -1,0 +1,58 @@
+name: update
+
+# Once a month, every lock moved to the newest each requirement allows, as one pull request into develop. A
+# crate behind is an update to make, not a red job; it is gated locally before merge, and
+# reaches main with the next develop -> main merge, so it costs no gate run of its own.
+on:
+  schedule:
+    # The 3rd at 06:29: after the month's releases settle, off the top of the hour.
+    - cron: "29 6 3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Pushes its branch and opens or refreshes the pull request.
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BRANCH: deps/cargo-update
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: develop
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      # Both client manifests patch the pinned engine crates to the unpacked source, which cargo must read to resolve.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/deps-src/webrtc/download
+          key: audit-webrtc-${{ hashFiles('scripts/deps/webrtc.sh', 'patches/webrtc/*.patch') }}
+      - run: ./scripts/deps/webrtc.sh
+      - name: Update every lock
+        # Every workspace: each tracked Cargo.lock's directory.
+        run: for lock in $(git ls-files -- '*Cargo.lock'); do cargo update --manifest-path "$(dirname "$lock")/Cargo.toml"; done
+      - name: Open or refresh the pull request
+        run: |
+          if git diff --quiet -- '*Cargo.lock'; then echo "Every lock is current."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --create "$BRANCH"
+          git commit --quiet --message "build(deps): the month's cargo update" -- '*Cargo.lock'
+          git push --force origin "$BRANCH"
+          if [[ -z "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[]')" ]]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --base develop --head "$BRANCH" \
+              --title "build(deps): the month's cargo update" \
+              --body "Every lock moved to the newest each requirement allows. Gate it locally (\`mise run gate\`) before merging; no workflow runs on this pull request."
+          fi

@@ -1,0 +1,27 @@
+From 949eb4d1cc3d625406ef97c80f5307529fbee1e6 Mon Sep 17 00:00:00 2001
+From: Chatkord <chatkord@example.invalid>
+Subject: [PATCH 2/4] avcodec/vulkan_encode_av1: give a constant q index only
+ without rate control
+
+VkVideoEncodeAV1PictureInfoKHR.constantQIndex was the frame's base_q_idx
+whatever the rate control mode, while it must be zero unless the rate
+control is disabled (VUID-vkCmdEncodeVideoKHR-constantQIndex-10320).
+---
+ libavcodec/vulkan_encode_av1.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/libavcodec/vulkan_encode_av1.c b/libavcodec/vulkan_encode_av1.c
+index 3f32405..d387acf 100644
+--- a/libavcodec/vulkan_encode_av1.c
++++ b/libavcodec/vulkan_encode_av1.c
+@@ -442,7 +442,9 @@ static int init_pic_params(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+         .pNext = NULL,
+         .predictionMode = pred_mode,
+         .rateControlGroup = rc_group,
+-        .constantQIndex = quantization->base_q_idx,
++        /* Only a disabled rate control takes a constant index (VUID-10320) */
++        .constantQIndex = ctx->opts.rc_mode == VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR ?
++                          quantization->base_q_idx : 0,
+         .pStdPictureInfo = &ap->av1pic_info,
+         // .referenceNameSlotIndices is set below
+         .primaryReferenceCdfOnly = 0,

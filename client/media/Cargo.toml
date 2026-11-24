@@ -1,0 +1,65 @@
+[package]
+name = "media"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "Encode and decode through the pinned FFmpeg, and what this machine can do in hardware"
+
+[dependencies]
+# Linked statically on Linux (below) and as DLLs on Windows, where `dllimport` keeps the host's calls apart from the
+# engine's own FFmpeg
+ffmpeg-sys-next = { workspace = true, features = ["avcodec", "avfilter", "swscale"] }
+report.workspace = true
+# Screen and camera capture, whose pictures this encodes and decodes
+capture = { path = "../capture" }
+
+# Linux asks Vulkan which DMA-BUF modifiers the GPU imports and records its own commands on FFmpeg's Vulkan device; it
+# loads at run time, so a machine without one is reported, not unbuildable
+[target.'cfg(target_os = "linux")'.dependencies]
+ffmpeg-sys-next = { workspace = true, features = ["static"] }
+ash = { workspace = true, features = ["std", "loaded"] }
+# A render node's device number is split into the major and minor Vulkan names its GPU by (`fs`)
+rustix = { workspace = true, features = ["std", "fs"] }
+
+[features]
+# Makes `av`, the one safe layer over FFmpeg, public, for the tests' painted DMA-BUF that other crates share.
+testing = []
+
+# Windows' encoders and decoders ask the D3D11 and D3D12 devices what their drivers decode and are removed from, and the
+# adapters DXGI lists
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Direct3D12",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Media_MediaFoundation",
+  "Win32_Security",
+  "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+# The FFmpeg log test reads the events a subscriber is given.
+tracing.workspace = true
+# The decode fuzz target's seeds (`proto::fuzz`).
+proto = { workspace = true, features = ["testing"] }
+tier = { path = "../tier" }
+# The cameras' sample JPEGs.
+capture = { path = "../capture", features = ["testing"] }
+# The tests' painted DMA-BUF reaches FFmpeg through `av`, which the `testing` feature makes public.
+media = { path = ".", features = ["testing"] }
+
+# The capture tests name the primary monitor itself, as the picker would, and read their own CPU time
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = [
+  "Foundation",
+  "Graphics_Capture",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Threading",
+  "Win32_System_WinRT_Graphics_Capture",
+] }
+
+[lints]
+workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "portrait"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "A picture a person sends or a server keeps: checked before it is sent and after it is fetched, decoded to RGBA"
+
+[dependencies]
+proto.workspace = true
+terms = { path = "../terms" }
+# The decoders the server's intake uses, at its version (MIT or Apache-2.0): a picture is checked here
+# by the same rules before it is sent, and a kept one is read back as the PNG the server made.
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,35 @@
+[package]
+name = "webrtc"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "Pinned, patched libwebrtc: the host-app surface, senders, receivers, devices"
+
+[dependencies]
+libwebrtc.workspace = true
+link = { path = "../link" }
+terms = { path = "../terms" }
+proto.workspace = true
+report.workspace = true
+rtc = { path = "../rtc" }
+# The devices a host lists have one shape, which the sound server's listing makes.
+sound = { path = "../sound" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+futures-util.workspace = true
+tokio = { workspace = true, features = ["rt", "time", "sync", "net"] }
+# The stronger noise suppressor: RNNoise in Rust (BSD-3-Clause), at the chain's own 10 ms of 48 kHz, no resampling.
+nnnoiseless = { version = "0.5.2", default-features = false }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+# `test-util`: an engine call that never answers, on a paused clock.
+tokio = { workspace = true, features = ["rt", "macros", "time", "test-util"] }
+futures-util.workspace = true
+
+[features]
+# The engine's name for a virtual device, for a test that chooses it.
+testing = []
+
+[lints]
+workspace = true

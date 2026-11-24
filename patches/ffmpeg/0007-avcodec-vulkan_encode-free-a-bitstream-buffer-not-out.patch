@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <chatkord@example.invalid>
+Subject: [PATCH 7/7] avcodec/vulkan_encode: free a bitstream buffer not
+ output
+
+A picture submitted but not yet output when the encoder is closed (an
+encoder freed without draining, its last picture still in flight) kept
+the pooled bitstream buffer it holds in vp->pkt_buf: neither
+vulkan_encode_free_pic() nor ff_vulkan_encode_uninit() released it, nor
+the first half of a split frame kept in ctx->prev_buf_ref. The pool
+entry then outlived the VkDevice (VUID-vkDestroyDevice-device-05137 in
+the validation layer) and its later free read the freed context. Both
+are now returned to the pool before it is uninitialised.
+---
+--- a/libavcodec/vulkan_encode.c
++++ b/libavcodec/vulkan_encode.c
+@@ -42,6 +42,11 @@
+     vp->in.view = VK_NULL_HANDLE;
+ 
+     ctx->slots[vp->dpb_slot.slotIndex] = NULL;
++
++    /* A picture freed before it was output (the encoder closed undrained)
++     * still holds its bitstream buffer: return it to the pool while the
++     * context the pool frees it through is alive. */
++    av_refstruct_unref(&vp->pkt_buf);
+ }
+ 
+ av_cold void ff_vulkan_encode_uninit(FFVulkanEncodeContext *ctx)
+@@ -63,6 +68,9 @@
+     for (FFHWBaseEncodePicture *pic = ctx->base.pic_start; pic; pic = pic->next)
+         vulkan_encode_free_pic(ctx, pic);
+ 
++    /* The first half of a frame whose second never came */
++    av_refstruct_unref(&ctx->prev_buf_ref);
++
+     av_refstruct_pool_uninit(&ctx->buf_pool);
+ 
+     ff_hw_base_encode_close(&ctx->base);

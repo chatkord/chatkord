@@ -1,0 +1,76 @@
+# The gate: `mise run gate` before every push, `mise run gate:fast` before every commit.
+# Each task is one bash script (Git Bash on Windows) under scripts/gate, so the same line runs under sh and cmd.
+["gate:fast"]
+description = "The git hooks, the privacy guard, formatting, links, the lints and dependencies"
+depends = ["gate:hooks", "gate:privacy", "gate:fmt", "gate:links", "gate:lints", "gate:deny", "gate:rules"]
+run = "echo 'GATE: pass (fast)'"
+
+[gate]
+description = "The fast checks, then every workspace's lints and tests"
+run = "bash scripts/gate/gate.sh"
+
+[hooks]
+description = "Install the git hooks lefthook.yml names"
+run = "git config --unset core.hooksPath || true; lefthook install"
+
+# The toolchain and components rust-toolchain.toml names, installed once before the stages that call cargo fan out:
+# on a machine without them each stage's first cargo would install them at the same time, and the installs collide.
+# With them present it is a check that needs no network.
+["gate:toolchain"]
+run = "rustup toolchain install --no-self-update"
+
+# protocol/ is the pinned commit, unchanged: the stages after it run its scripts and build its crates.
+["gate:pinned"]
+run = "bash scripts/gate/pinned.sh"
+
+# The hooks lefthook.yml names are installed and executable, put back by [hooks] when they are not.
+["gate:hooks"]
+depends = ["gate:pinned"]
+run = "bash protocol/scripts/gate/hooks.sh"
+
+["gate:privacy"]
+depends = ["gate:pinned"]
+run = "bash scripts/gate/privacy.sh"
+
+["gate:fmt"]
+depends = ["gate:pinned", "gate:toolchain"]
+run = "bash protocol/scripts/gate/fmt.sh"
+
+["gate:links"]
+depends = ["gate:pinned"]
+run = "bash protocol/scripts/gate/links.sh"
+
+["gate:lints"]
+depends = ["gate:pinned"]
+run = "bash protocol/scripts/gate/lints.sh"
+
+# The gate's own rules (what a change reaches, what a pass records) answer their self-tests.
+["gate:rules"]
+depends = ["gate:pinned"]
+run = "bash scripts/gate/rules.sh"
+
+# The engine crates are unpacked first, which deny.sh no longer does: cargo-deny reads their patched locks.
+["gate:deny"]
+depends = ["gate:pinned", "gate:toolchain"]
+run = "bash scripts/deps/webrtc.sh > /dev/null && bash protocol/scripts/gate/deny.sh"
+
+# Not a stage: the parsers an untrusted peer feeds, fuzzed in the builder.
+[fuzz]
+description = "Fuzz TARGET (or every target) for SECONDS each, then minimise its corpus"
+run = "bash scripts/gate/fuzz.sh"
+
+# Not a stage: AddressSanitizer over the code that holds C, on Linux.
+[sanitize]
+description = "AddressSanitizer: `fuzz [SECONDS]` the software decoder, or `lab` the media, pw and picture lab tests"
+run = "bash scripts/gate/sanitize.sh"
+
+# Not a stage: a dev release of HEAD, once its gate passed; here, since a file of its own would be one more include in
+# mise.toml, which the builder image is made from.
+["release:dev"]
+description = "HEAD's dev release, once its gate passed: a GitHub pre-release with the AppImage"
+run = "bash scripts/release/dev.sh"
+
+# Not a stage: the Windows setup added to the dev release TAG, on a Windows machine at its commit.
+["release:dev:windows"]
+description = "Build the Windows setup at HEAD, the commit of the dev release TAG, and add it to that pre-release"
+run = "bash scripts/release/dev-windows.sh"

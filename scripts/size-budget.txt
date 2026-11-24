@@ -1,0 +1,6 @@
+# The most bytes Chatkord's binary may take as each system's package installs it, stripped (on Linux the window and
+# the command line, on Windows the window): a line a system, its name and its bytes. scripts/package/budget.sh checks
+# it after the build and fails over it. A number the maintainer chooses: a change that needs more raises it in its own
+# commit, with the reason.
+linux 80000000
+windows 60000000

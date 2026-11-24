@@ -1,0 +1,3 @@
+{"rtpParameters": {"mid": "0", "codecs": [
+ {"mimeType": "audio/opus", "payloadType": 100, "clockRate": 48000, "channels": 2, "parameters": {}, "rtcpFeedback": []}
+], "headerExtensions": [], "encodings": [{"ssrc": 1}], "rtcp": {"reducedSize": true}}}

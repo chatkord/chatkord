@@ -1,0 +1,9 @@
+[package]
+name = "tier"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "Which machine a client test needs, checked against the nextest group it ran in; only ever a dev-dependency"
+
+[lints]
+workspace = true

@@ -1,0 +1,14 @@
+HANDOFF.md
+upstream/
+target/
+build/
+*.log
+__pycache__/
+.DS_Store
+# Private notes, LAB.local.md among them: real hosts and devices never leave this machine.
+*.local.md
+node_modules/
+.venv/
+.mypy_cache/
+# A language server's index (clangd's background index), kept per machine.
+/.cache/

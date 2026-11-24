@@ -1,0 +1,25 @@
+[package]
+name = "testserver"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "What the client's tests start outside their process: a server container, and steps undone even after a crash; only ever a dev-dependency"
+
+[dependencies]
+# The relay's commands and replies between a test and the relay's process, one JSON line each.
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tier = { path = "../tier" }
+# `io-util`, `macros`, `sync`: a `Line` carries a connection both ways until a test cuts it.
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "net", "time", "io-util", "macros", "sync"] }
+
+# The relay, run in the server's test image (scripts/test-image.sh) beside the server.
+[[bin]]
+name = "chatkord-test-relay"
+path = "src/bin/relay.rs"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "net", "macros", "time"] }
+
+[lints]
+workspace = true

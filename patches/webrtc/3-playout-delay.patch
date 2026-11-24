@@ -1,0 +1,150 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <noreply@example.invalid>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] playout-delay: the synthetic audio device reports the
+ speaker's delay
+
+The synthetic audio device answered the engine's PlayoutDelay with 0. libwebrtc's audio and
+video sync adds that delay to a sound's delay (ChannelReceive::GetSyncInfo).
+Measured: with a speaker 150 ms late, the picture is held 140 ms longer once the sync has
+settled (it moves some ten ms a second), so a watched screen keeps to its sound.
+
+The host sets the delay its chain's speaker measures.
+
+diff --git a/libwebrtc/src/native/peer_connection_factory.rs b/libwebrtc/src/native/peer_connection_factory.rs
+index 422ea00..3b64f97 100644
+--- a/libwebrtc/src/native/peer_connection_factory.rs
++++ b/libwebrtc/src/native/peer_connection_factory.rs
+@@ -369,6 +369,12 @@ impl PeerConnectionFactory {
+         self.sys_handle.audio_device().platform_adm_ref_count()
+     }
+ 
++    /// Added by Chatkord (patches/webrtc): how long the host's own speaker takes to play what the synthetic device
++    /// hands it, which the engine's audio and video sync counts in the sound's delay.
++    pub fn set_playout_delay_ms(&self, delay_ms: u16) {
++        self.sys_handle.audio_device().set_playout_delay_ms(delay_ms)
++    }
++
+     /// Returns true if Platform ADM is currently active (ref_count > 0).
+     pub fn is_platform_adm_active(&self) -> bool {
+         self.sys_handle.audio_device().is_platform_adm_active()
+diff --git a/libwebrtc/src/peer_connection_factory.rs b/libwebrtc/src/peer_connection_factory.rs
+index 8e50457..c4ff703 100644
+--- a/libwebrtc/src/peer_connection_factory.rs
++++ b/libwebrtc/src/peer_connection_factory.rs
+@@ -286,6 +286,9 @@ pub mod native {
+         fn release_platform_adm(&self);
+         fn platform_adm_ref_count(&self) -> i32;
+         fn is_platform_adm_active(&self) -> bool;
++        /// Added by Chatkord (patches/webrtc): how long the host's own speaker takes to play what the engine hands
++        /// it, counted in the sound's delay by the engine's audio and video sync.
++        fn set_playout_delay_ms(&self, delay_ms: u16);
+     }
+ 
+     impl PeerConnectionFactoryExt for PeerConnectionFactory {
+@@ -428,5 +431,9 @@ pub mod native {
+         fn is_platform_adm_active(&self) -> bool {
+             self.handle.is_platform_adm_active()
+         }
++
++        fn set_playout_delay_ms(&self, delay_ms: u16) {
++            self.handle.set_playout_delay_ms(delay_ms)
++        }
+     }
+ }
+diff --git a/webrtc-sys/include/livekit/adm_proxy.h b/webrtc-sys/include/livekit/adm_proxy.h
+index f35ef0b..93de659 100644
+--- a/webrtc-sys/include/livekit/adm_proxy.h
++++ b/webrtc-sys/include/livekit/adm_proxy.h
+@@ -16,6 +16,7 @@
+ 
+ #pragma once
+ 
++#include <atomic>
+ #include <optional>
+ #include <utility>
+ #include <variant>
+@@ -118,6 +119,12 @@ class AdmProxy : public webrtc::AudioDeviceModule {
+   /// Returns true if Platform ADM is currently active (ref_count > 0).
+   bool is_platform_adm_active() const;
+ 
++  // Added by Chatkord (patches/webrtc): how long the host's own speaker takes
++  // to play what the synthetic device hands it, which the engine's audio and
++  // video sync adds to the sound's delay (PlayoutDelay). Lock-free: the host
++  // sets it from its own thread.
++  void set_synthetic_playout_delay(uint16_t delay_ms);
++
+   // ===========================================================================
+   // Recording/Playout Control
+   // ===========================================================================
+@@ -281,6 +288,8 @@ class AdmProxy : public webrtc::AudioDeviceModule {
+   const webrtc::Environment env_;
+   webrtc::Thread* const worker_thread_;
+ 
++  std::atomic<uint16_t> synthetic_playout_delay_ms_{0};
++
+   // All mutable state below is owned by the worker thread.
+ 
+   // Synthetic ADM for synthetic mode - pumps the WebRTC audio pipeline without
+diff --git a/webrtc-sys/include/livekit/audio_device_controller.h b/webrtc-sys/include/livekit/audio_device_controller.h
+index 1ea994a..c9b0b96 100644
+--- a/webrtc-sys/include/livekit/audio_device_controller.h
++++ b/webrtc-sys/include/livekit/audio_device_controller.h
+@@ -78,6 +78,8 @@ class AudioDeviceController {
+   void release_platform_adm() const;
+   int platform_adm_ref_count() const;
+   bool is_platform_adm_active() const;
++  // Added by Chatkord (patches/webrtc): see AdmProxy::set_synthetic_playout_delay.
++  void set_playout_delay_ms(uint16_t delay_ms) const;
+ 
+  private:
+   // The AdmProxy marshals its calls onto the runtime's worker thread, keep
+diff --git a/webrtc-sys/src/adm_proxy.cpp b/webrtc-sys/src/adm_proxy.cpp
+index 98d8468..2b4eacf 100644
+--- a/webrtc-sys/src/adm_proxy.cpp
++++ b/webrtc-sys/src/adm_proxy.cpp
+@@ -822,14 +822,15 @@ int32_t AdmProxy::PlayoutDelay(uint16_t* delayMS) const {
+     if (IsPlatformPlayoutActive()) {
+       return platform_adm_->PlayoutDelay(delayMS);
+     }
+-    if (synthetic_adm_) {
+-      return synthetic_adm_->PlayoutDelay(delayMS);
+-    }
+-    *delayMS = 0;
++    *delayMS = synthetic_playout_delay_ms_.load(std::memory_order_relaxed);
+     return 0;
+   });
+ }
+ 
++void AdmProxy::set_synthetic_playout_delay(uint16_t delay_ms) {
++  synthetic_playout_delay_ms_.store(delay_ms, std::memory_order_relaxed);
++}
++
+ bool AdmProxy::BuiltInAECIsAvailable() const {
+   return WithPlatformAdm<bool>(false, [](webrtc::AudioDeviceModule& adm) {
+     return adm.BuiltInAECIsAvailable();
+diff --git a/webrtc-sys/src/audio_device_controller.cpp b/webrtc-sys/src/audio_device_controller.cpp
+index ea777c6..30cf0e5 100644
+--- a/webrtc-sys/src/audio_device_controller.cpp
++++ b/webrtc-sys/src/audio_device_controller.cpp
+@@ -274,4 +274,8 @@ bool AudioDeviceController::is_platform_adm_active() const {
+   return adm_proxy_->is_platform_adm_active();
+ }
+ 
++void AudioDeviceController::set_playout_delay_ms(uint16_t delay_ms) const {
++  adm_proxy_->set_synthetic_playout_delay(delay_ms);
++}
++
+ }  // namespace livekit_ffi
+diff --git a/webrtc-sys/src/audio_device_controller.rs b/webrtc-sys/src/audio_device_controller.rs
+index f90eaa4..f4edd15 100644
+--- a/webrtc-sys/src/audio_device_controller.rs
++++ b/webrtc-sys/src/audio_device_controller.rs
+@@ -66,6 +66,7 @@ pub mod ffi {
+         fn release_platform_adm(self: &AudioDeviceController);
+         fn platform_adm_ref_count(self: &AudioDeviceController) -> i32;
+         fn is_platform_adm_active(self: &AudioDeviceController) -> bool;
++        fn set_playout_delay_ms(self: &AudioDeviceController, delay_ms: u16);
+     }
+ }
+ 

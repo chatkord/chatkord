@@ -1,0 +1,6 @@
+{"id": "consumer", "rtpParameters": {"mid": "1", "codecs": [
+ {"mimeType": "video/AV1", "payloadType": 45, "clockRate": 90000, "parameters": {}, "rtcpFeedback": []},
+ {"mimeType": "video/rtx", "payloadType": 46, "clockRate": 90000, "parameters": {"apt": 45}, "rtcpFeedback": []},
+ {"mimeType": "video/H264", "payloadType": 102, "clockRate": 90000, "parameters": {"packetization-mode": 1, "profile-level-id": "42e01f"}, "rtcpFeedback": []},
+ {"mimeType": "video/rtx", "payloadType": 103, "clockRate": 90000, "parameters": {"apt": 102}, "rtcpFeedback": []}
+], "headerExtensions": [], "encodings": [{"ssrc": 1, "rtx": {"ssrc": 2}}], "rtcp": {"cname": "c", "reducedSize": true}}}

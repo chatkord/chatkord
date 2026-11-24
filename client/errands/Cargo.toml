@@ -1,0 +1,51 @@
+[package]
+name = "errands"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "What the screens ask of the world, carried out the same way for every host: the door's sign-in, and a window's effects; no toolkit"
+
+[dependencies]
+link = { path = "../link" }
+terms = { path = "../terms" }
+screens = { path = "../screens" }
+words = { path = "../words" }
+platform = { path = "../platform" }
+sound = { path = "../sound" }
+call = { path = "../call" }
+choices = { path = "../choices" }
+chat = { path = "../chat" }
+picture = { path = "../picture" }
+portrait = { path = "../portrait" }
+share = { path = "../share" }
+proto.workspace = true
+report.workspace = true
+# A link's preview, made on this device from the page.
+fetch = { path = "../fetch" }
+# The window's own update: its channel, checks, downloads and the package a restart starts.
+update = { path = "../update" }
+# `rt-multi-thread`: the runner's own runtime; `signal`: a terminate signal, which a session's end sends its programs,
+# quits the window with every server parted.
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+
+# Our own picker's stills on Windows: each source drawn small on the GPU.
+[target.'cfg(windows)'.dependencies]
+media = { path = "../media" }
+
+[dev-dependencies]
+# A test reads the notes an errand's panic leaves.
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+tier = { path = "../tier" }
+# Undoes a helper a test started even when the test crashes.
+testserver = { path = "../testserver" }
+keyring-core.workspace = true
+# A kept look the runner's test writes.
+design = { path = "../design" }
+# The window a test's place is made in.
+words = { path = "../words", features = ["english"] }
+# `test-util`: a wake's time on a paused clock.
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time", "net", "test-util"] }
+
+[lints]
+workspace = true

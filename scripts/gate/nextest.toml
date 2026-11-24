@@ -1,0 +1,5 @@
+# What the gate adds to every workspace's nextest profiles (`--tool-config-file`, scripts/gate/workspace.sh).
+# A test that hangs is ended: the slowest measured runs about 230 s (a timing test in `picture`, `proto`'s decode
+# cost in a debug build), so one is ended at twice that, a period and a SLOW line each 60 s before.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 8 }

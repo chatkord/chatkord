@@ -1,0 +1,32 @@
+[package]
+name = "share"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "Choosing what to share: the desktop portal's picker returns a monitor or a window as a PipeWire node"
+
+# The portal, and KWin, asked which processes own the picked window (`owner`).
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { workspace = true, features = ["async-io", "screencast"] }
+zbus = { workspace = true, features = ["async-io", "blocking-api"] }
+
+# The monitors and windows our picker lists, their icons, and the item Windows Graphics Capture opens for one
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Graphics_Capture",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Threading",
+  "Win32_System_WinRT_Graphics_Capture",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# `StreamBuilder`, which makes the portal's answer in a test, is behind the portal's backend feature.
+ashpd = { workspace = true, features = ["async-io", "screencast", "backend"] }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+
+[lints]
+workspace = true

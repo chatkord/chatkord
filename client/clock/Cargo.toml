@@ -1,0 +1,12 @@
+[package]
+name = "clock"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "A system performance-counter tick as an instant of this process's clock, for what Windows capture and sound stamp"
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_System_Performance"] }
+
+[lints]
+workspace = true

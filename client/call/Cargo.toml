@@ -1,0 +1,48 @@
+[package]
+name = "call"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "A call without a terminal or a toolkit: joining and hearing a voice channel, sending a screen into it, showing one of its screens in a viewer the caller makes"
+
+[dependencies]
+link = { path = "../link" }
+terms = { path = "../terms" }
+media = { path = "../media" }
+capture = { path = "../capture" }
+sound = { path = "../sound" }
+net = { path = "../net" }
+picture = { path = "../picture" }
+screens = { path = "../screens" }
+words = { path = "../words" }
+choices = { path = "../choices" }
+share = { path = "../share" }
+webrtc = { path = "../webrtc" }
+proto.workspace = true
+report.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
+# A share's health, in the run's log every ten seconds (`send::log`, `watch::log`, `voice_log`), as link and media log theirs.
+
+# The item Windows' picker gives, which the capture opens.
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Graphics_Capture"] }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+# The virtual microphone and speaker the lab tests choose.
+testserver = { path = "../testserver" }
+# A sound owner whose listing a test gives.
+sound = { path = "../sound", features = ["testing"] }
+webrtc = { path = "../webrtc", features = ["testing"] }
+# `test-util`: a step that never answers, on a paused clock.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "test-util"] }
+# Reads back the note a share's pipeline writes.
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+
+# The resident memory the idle test reads (`GetProcessMemoryInfo`).
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = ["Win32_System_ProcessStatus", "Win32_System_Threading"] }
+
+[lints]
+workspace = true

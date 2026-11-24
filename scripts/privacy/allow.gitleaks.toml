@@ -1,0 +1,18 @@
+# This repository's allowances for the privacy guard's shapes (protocol/.gitleaks.toml), joined to them at run time by
+# protocol/scripts/privacy/guard.py. Each names its shape (`targetRules`) or its value, and says why.
+
+[[allowlists]]
+description = "the link preview's address guard and a voice candidate's scope: the ranges each refuses are its rule, and its tests name each"
+targetRules = ["private-ip"]
+paths = ['''^client/fetch/src/(?:guard|tests)\.rs$''', '''^client/rtc/src/reached\.rs$''']
+
+[[allowlists]]
+description = "the link preview's address guard and a voice candidate's scope: a multicast or globally routable address, which no documentation range is"
+targetRules = ["public-ip"]
+paths = ['''^client/fetch/src/(?:guard|tests)\.rs$''', '''^client/rtc/src/reached\.rs$''']
+
+# Named by value, so the allowance moves with the line and covers nothing else.
+[[allowlists]]
+description = "a test's deliberately malformed server identity, which gitleaks' generic rule takes for a key"
+regexTarget = "match"
+regexes = ['''0123456789ABCDEF0123456789ABCDEF''']

@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <noreply@example.invalid>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] h264-high: name H.264 High at level 5.2, offered by codec
+
+libwebrtc's own lists lack High (they carry baseline, constrained baseline and main at 3.1),
+and the router's H.264 is High at level 5.2 (640034).
+Measured: matched by name, H.264 High beside the software encoder's constrained baseline was
+left out of the offer; and with the pass-through not listed last among the encoders'
+implementations a codec only it sends left the send stream with none, and the engine stopped
+the process.
+
+The pass-through encoder and the decoders name 640034, the factory matches formats by codec,
+and the pass-through's implementations come last.
+
+diff --git a/webrtc-sys/src/passthrough_video_encoder.cpp b/webrtc-sys/src/passthrough_video_encoder.cpp
+index f4cd1a9..99b4313 100644
+--- a/webrtc-sys/src/passthrough_video_encoder.cpp
++++ b/webrtc-sys/src/passthrough_video_encoder.cpp
+@@ -412,8 +412,9 @@ class PassthroughVideoEncoder final : public VideoEncoder {
+ }  // namespace
+ 
+ PassthroughVideoEncoderFactory::PassthroughVideoEncoderFactory() {
++  // High at level 5.2, the router's H.264.
+   std::map<std::string, std::string> h264_parameters = {
+-      {"profile-level-id", "42e01f"},
++      {"profile-level-id", "640034"},
+       {"level-asymmetry-allowed", "1"},
+       {"packetization-mode", "1"},
+   };
+diff --git a/webrtc-sys/src/video_decoder_factory.cpp b/webrtc-sys/src/video_decoder_factory.cpp
+index a9f6a30..e46a130 100644
+--- a/webrtc-sys/src/video_decoder_factory.cpp
++++ b/webrtc-sys/src/video_decoder_factory.cpp
+@@ -152,6 +152,9 @@ std::vector<webrtc::SdpVideoFormat> VideoDecoderFactory::GetSupportedFormats()
+          webrtc::SupportedH264DecoderCodecs()) {
+       formats.push_back(h264_format);
+     }
++    // Either decoder takes High, the router's H.264.
++    formats.push_back(webrtc::CreateH264Format(webrtc::H264Profile::kProfileHigh,
++                                               webrtc::H264Level::kLevel5_2, "1"));
+   }
+ 
+   formats.push_back(webrtc::SdpVideoFormat(
+diff --git a/webrtc-sys/src/video_encoder_factory.cpp b/webrtc-sys/src/video_encoder_factory.cpp
+index 4dcafa5..1b571a7 100644
+--- a/webrtc-sys/src/video_encoder_factory.cpp
++++ b/webrtc-sys/src/video_encoder_factory.cpp
+@@ -409,10 +409,12 @@ VideoEncoderFactory::InternalFactory::GetSupportedFormats() const {
+       continue;
+     }
+     for (const auto& format : backend_factory.factory->GetSupportedFormats()) {
++      // By codec, not by name: a profile no real encoder makes (H.264 High
++      // beside the software encoder's Constrained Baseline) is offered too.
+       const bool codec_listed =
+           std::any_of(formats.begin(), formats.end(),
+                       [&](const webrtc::SdpVideoFormat& existing) {
+-                        return IsSameCodecName(existing.name, format.name);
++                        return existing.IsSameCodec(format);
+                       });
+       if (!codec_listed) {
+         formats.push_back(format);
+@@ -493,6 +495,18 @@ VideoEncoderFactory::InternalFactory::GetImplementations() const {
+     formats.push_back(WithBackend(format, VideoEncoderBackend::Software));
+   }
+ 
++  // Last, so a real encoder keeps its place: a send codec only the
++  // pass-through takes (H.264 High, which no real encoder here makes) is
++  // matched here, or a pre-encoded sender is left with no codec at all.
++  for (const auto& backend_factory : factories_) {
++    if (backend_factory.backend != VideoEncoderBackend::PreEncoded) {
++      continue;
++    }
++    for (const auto& format : backend_factory.factory->GetImplementations()) {
++      formats.push_back(WithBackend(format, VideoEncoderBackend::PreEncoded));
++    }
++  }
++
+   // libwebrtc only sends a negotiated codec that appears here, so a codec
+   // only the pass-through implements must be listed too, or a pre-encoded
+   // sender fails with "No video codecs in common". List it last and

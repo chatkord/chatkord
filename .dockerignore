@@ -1,0 +1,12 @@
+# The builder image is built from these alone; private notes, research clones and build trees never enter the context.
+*
+!rust-toolchain.toml
+!scripts/deps/
+!protocol/scripts/find-python.sh
+!scripts/package/linux.env
+!scripts/package/va-system-drivers.txt
+!scripts/ci/builder-entry.sh
+!patches/ffmpeg/
+!patches/webrtc/
+!mise.toml
+!mise.lock

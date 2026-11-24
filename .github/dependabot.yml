@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Every action is pinned by its full commit with the release in a comment; Dependabot moves both together.
+  - package-ecosystem: github-actions
+    directory: /
+    # Into develop, where work lands: the gate runs only on pull requests into main, so a bump costs no run of its
+    # own and is proven with the next develop -> main merge.
+    target-branch: develop
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

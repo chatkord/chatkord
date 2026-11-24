@@ -1,0 +1,51 @@
+name: builder
+
+# The builder image, named by its recipe's digest (scripts/ci/builder.sh tag) and
+# kept in GHCR: built and pushed only when that tag is missing, so a run whose recipe did not change spends seconds.
+# CI's gate calls it first; a run by hand builds one ahead of a pull request.
+on:
+  workflow_call:
+    outputs:
+      image:
+        description: "The builder image for this tree, by its recipe's digest"
+        value: ${{ jobs.builder.outputs.image }}
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/protocol
+        with:
+          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+      - id: tag
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "registry=ghcr.io/$owner/chatkord-builder" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$owner/chatkord-builder:$(scripts/ci/builder.sh tag)" >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push the image when its recipe is new
+        env:
+          CHATKORD_CONTAINER: docker
+          CHATKORD_BUILDER: ${{ steps.tag.outputs.registry }}
+          IMAGE: ${{ steps.tag.outputs.image }}
+        run: |
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "builder: $IMAGE is there already"
+          else
+            df -h /
+            scripts/ci/free-disk.sh
+            scripts/ci/builder.sh build --push
+          fi

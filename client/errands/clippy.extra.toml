@@ -1,0 +1,10 @@
+# A task an errand starts is named and noted when it panics: `errand::spawn`, `spawn_here` and `blocking` are the only
+# ways to start one.
+disallowed-methods = [
+    { path = "tokio::spawn", reason = "start an errand with errand::spawn_here, which names it and notes its panic" },
+    { path = "tokio::task::spawn_blocking", reason = "start an errand with errand::blocking, which names it and notes its panic" },
+    { path = "tokio::runtime::Runtime::spawn", reason = "start an errand with errand::spawn, which names it and notes its panic" },
+    { path = "tokio::runtime::Runtime::spawn_blocking", reason = "start an errand with errand::blocking, which names it and notes its panic" },
+    { path = "tokio::runtime::Handle::spawn", reason = "start an errand with errand::spawn, which names it and notes its panic" },
+    { path = "tokio::runtime::Handle::spawn_blocking", reason = "start an errand with errand::blocking, which names it and notes its panic" },
+]

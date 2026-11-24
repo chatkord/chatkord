@@ -1,0 +1,72 @@
+[package]
+name = "capture"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "A screen's pictures as buffers the GPU owns, and a camera's as its device hands them over, with no codec in either"
+
+# Linux captures through PipeWire (`pw`), which loads at run time, so a machine without it is reported, not unbuildable
+[target.'cfg(target_os = "linux")'.dependencies]
+pw = { path = "../pw" }
+libspa = { workspace = true, features = ["v0_3_33"] }
+report.workspace = true
+# A captured buffer's implicit fence is exported (`DMA_BUF_IOCTL_EXPORT_SYNC_FILE`) through its typed ioctl
+rustix = { workspace = true, features = ["std", "fs"] }
+# A camera is granted and reached through the camera portal (`AccessCamera`, `OpenPipeWireRemote`), as the share's
+# screen is through the screen cast portal's, with the same ashpd; its calls are awaited on the thread that reads the
+# camera, with async-io's own executor, the one ashpd's `async-io` feature already runs on
+ashpd = { workspace = true, features = ["async-io", "camera"] }
+async-io = "2.6.0"
+
+# Windows captures through Windows Graphics Capture into one D3D11 device, whose video processor converts for the encoder,
+# and reads its cameras through Media Foundation
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+  "Foundation",
+  "Graphics_Capture",
+  "Graphics_DirectX",
+  "Graphics_DirectX_Direct3D11",
+  "Win32_Devices_DeviceAndDriverInstallation",
+  "Win32_Devices_Properties",
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Direct3D12",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Media_KernelStreaming",
+  "Win32_Media_MediaFoundation",
+  "Win32_Security",
+  "Win32_System_Com",
+  "Win32_System_Threading",
+  "Win32_System_WinRT_Direct3D11",
+  "Win32_UI_WindowsAndMessaging",
+] }
+# `implement` (the camera's reader is answered on a callback of ours) names this crate
+windows-core.workspace = true
+report.workspace = true
+# A picture's Windows time, in the performance counter's ticks, is made an `Instant` of this process's clock
+clock = { path = "../clock" }
+# Which debug layer a test run asks for, read by `testing`'s helpers
+tier = { path = "../tier", optional = true }
+
+[features]
+# The cameras' sample JPEGs, and the debug layer a test run asks for, for the tests of another crate.
+testing = ["dep:tier"]
+
+[dev-dependencies]
+tier = { path = "../tier" }
+# The still test reads the debug layer its run asks for through `testing`
+capture = { path = ".", features = ["testing"] }
+
+# The capture tests name the primary monitor itself, as the picker would, and draw a window of their own
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = [
+  "Win32_Graphics_Gdi",
+  "Win32_System_LibraryLoader",
+  "Win32_System_WinRT_Graphics_Capture",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[lints]
+workspace = true

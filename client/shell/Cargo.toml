@@ -1,0 +1,88 @@
+[package]
+name = "shell"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client shell on iced: its own window loop, the receive loop in it, the decoded picture imported on the GPU"
+
+[dependencies]
+# iced's master, on wgpu 30 like `picture`: 0.14.0 is on wgpu 27 and cannot share the device a picture is imported
+# onto, which our own window loop makes.
+iced_winit.workspace = true
+# `web-colors`: the surface is not sRGB, so the video painter's values are not re-encoded; colours are painted as
+# given, which `design`'s contrast maths and the software renderer assume too. No default features: wgpu's backends are
+# `picture`'s, which chooses the GPU.
+iced_wgpu = { workspace = true, features = ["web-colors", "image"] }
+# `image`: our own picker's stills and icons, RGBA made once, through iced's raster pipeline without codecs.
+iced_widget = { workspace = true, features = ["wgpu", "svg", "image"] }
+ui = { path = "ui" }
+design = { path = "../design" }
+screens = { path = "../screens" }
+# A member is named by the id their server gives them.
+terms = { path = "../terms" }
+words = { path = "../words" }
+choices = { path = "../choices" }
+platform = { path = "../platform" }
+errands = { path = "../errands" }
+picture = { path = "../picture" }
+# Which VA-API driver libva tries first, decided before any thread starts (`media::carried_last_where_refused`).
+media = { path = "../media" }
+call = { path = "../call" }
+# A server's picture: checked and decoded (`portrait`), named by its file id (`proto`).
+portrait = { path = "../portrait" }
+proto = { path = "../../protocol/proto" }
+report = { path = "../../protocol/report" }
+pollster.workspace = true
+# What the window says of itself (the adapter, a graphics error, a watched share's end) goes to stderr as log lines, at
+# the versions the server uses; `fmt` alone, so a line is plain text and no filter or colour crate comes with it.
+tracing.workspace = true
+# `registry`: a second layer, this run's file, with its own filter.
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "registry", "std"] }
+# The tree a screen reader reads, as `ui::access` makes it, handed to the system's adapter.
+accesskit.workspace = true
+
+# Linux's two window systems, and the decorations Wayland leaves to the window; Windows' own needs no feature.
+[target.'cfg(target_os = "linux")'.dependencies]
+iced_winit = { workspace = true, features = ["wayland", "x11", "wayland-decorations"] }
+# AT-SPI, the tree handed to a Linux screen reader: AccessKit's adapter driven by our own loop, as `accesskit_winit`
+# is built on a winit other than iced's fork; on the zbus 5 and async-io the keyring and the tray already run.
+accesskit_unix = "0.24.1"
+# The command line, which this binary is when given its words.
+cli = { path = "../cli" }
+
+[target.'cfg(windows)'.dependencies]
+# UI Automation, the tree handed to a Windows screen reader: AccessKit's adapter driven by our own loop, as on Linux.
+accesskit_windows = "0.35.2"
+
+# The executable's own icon and name (what Explorer and Task Manager show), compiled into its resources; the name
+# read from the window's catalog, by the parser `words` uses. No `toml`: nothing is read from the manifest.
+[target.'cfg(windows)'.build-dependencies]
+winresource = { version = "0.1.34", default-features = false }
+fluent-syntax.workspace = true
+
+[dev-dependencies]
+# The anonymity test builds its window from the screens' fixtures.
+screens = { path = "../screens", features = ["testing"] }
+# The schema's marks of its secrets, read from its descriptor.
+proto = { path = "../../protocol/proto", features = ["testing"] }
+# The timeline example's messages.
+chat = { path = "../chat" }
+tier = { path = "../tier" }
+
+# The Restart Manager test closes the window as an installer does, and finds it among the desktop's windows.
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_RestartManager", "Win32_UI_WindowsAndMessaging"] }
+
+# The measuring spikes, kept out of the product binary. The timeline's message model and list
+# arithmetic carry unit tests, so its example is built and tested with the rest.
+[[example]]
+name = "timeline"
+path = "examples/timeline/main.rs"
+test = true
+
+[[example]]
+name = "picture"
+path = "examples/picture/main.rs"
+
+[lints]
+workspace = true

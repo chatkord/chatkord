@@ -1,0 +1,7 @@
+{"codecs": [
+ {"kind": "audio", "mimeType": "audio/opus", "clockRate": 48000, "channels": 2, "parameters": {}, "rtcpFeedback": [], "preferredPayloadType": 100},
+ {"kind": "video", "mimeType": "video/H264", "clockRate": 90000, "parameters": {"packetization-mode": 1, "profile-level-id": "42e01f"}, "rtcpFeedback": [], "preferredPayloadType": 101},
+ {"kind": "video", "mimeType": "video/rtx", "clockRate": 90000, "parameters": {"apt": 101}, "rtcpFeedback": [], "preferredPayloadType": 102}
+], "headerExtensions": [
+ {"kind": "audio", "uri": "urn:ietf:params:rtp-hdrext:sdes:mid", "preferredId": 1, "preferredEncrypt": false, "direction": "sendrecv"}
+]}

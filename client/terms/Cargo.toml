@@ -1,0 +1,19 @@
+[package]
+name = "terms"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The terms a connection to a server is spoken in: plain values with no network beneath them"
+
+[dependencies]
+idna = "1.1.0"
+report.workspace = true
+proto.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+# The fuzz targets' corpus.
+proto = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

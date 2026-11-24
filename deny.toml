@@ -1,0 +1,56 @@
+# The gate checks bans, licences and sources from the locks (protocol/scripts/gate/deny.sh); the advisories, which need the
+# network, are .github/workflows/audit.yml's.
+[graph]
+all-features = false
+# The two systems a release ships to: a dependency only another system builds is not ours to judge.
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Nothing is ignored globally: every entry below is one id, for one crate, with its reason.
+# An id disappears from this list when its crate can take the upgrade.
+ignore = [
+    { id = "RUSTSEC-2026-0370", reason = "zvariant 5.15.1 was folded into zbus 6.0.0, and the keyring store and ashpd ask for zbus 5.x" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names 4.3.5, the same zbus 5.19.0 tree" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive 5.15.1, zvariant's own derive crate on that path" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser 0.25.1 draws the shell's Wayland title bar through winit's sctk-adwaita, which takes no newer parser" },
+]
+
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+# Each is one the client's GPL-3.0-or-later takes in; the protocol's own MIT OR Apache-2.0 is covered by its two.
+allow = [
+    "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC",
+    "Unicode-3.0", "Zlib", "0BSD", "BSL-1.0", "CC0-1.0", "Unlicense",
+    "GPL-3.0-or-later",
+]
+# Allowed for one crate each, by name: a weak or unusual licence is a decision about that crate, not a blanket one.
+exceptions = [
+    { crate = "ffmpeg-sys-next", allow = ["WTFPL"] },          # bindings only; FFmpeg itself is built by scripts/deps/ffmpeg.sh
+    { crate = "libfuzzer-sys", allow = ["NCSA"] },             # LLVM's libFuzzer, in the fuzz targets alone, never shipped
+]
+
+# Our own crates are checked too, so a manifest that names no licence stops the gate.
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# A wildcard of ours -- a path member of this repo or of the protocol -- has no version to pin, and it is exempt only because
+# every member of every workspace here and in the protocol is `publish = false`, which is what makes it a private crate.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# The shell's commit-pinned iced and the forks it builds with (the pin ships until iced 0.15).
+allow-git = [
+    "https://github.com/iced-rs/iced",          # iced at the commit the client pins
+    "https://github.com/iced-rs/winit.git",     # iced's winit fork, locked by that commit
+    "https://github.com/hecrj/cosmic-text.git", # iced's cosmic-text fork, locked by that commit
+    "https://github.com/iced-rs/cryoglyph.git", # iced's glyph renderer, locked by that commit
+]

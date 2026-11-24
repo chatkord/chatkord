@@ -1,0 +1,12 @@
+[package]
+name = "net"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's rate and latency policy: which of the engine's targets are worth applying"
+
+[dependencies]
+proto.workspace = true
+
+[lints]
+workspace = true

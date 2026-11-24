@@ -1,0 +1,14 @@
+[package]
+name = "notices"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The third-party notices a package carries (notices.json): read whole at the edge, every length bounded"
+
+[dependencies]
+# The file is the shape of the type that reads it, at the versions `kept` uses.
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

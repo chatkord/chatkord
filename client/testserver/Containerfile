@@ -1,0 +1,6 @@
+# The server image the tests start (`scripts/test-image.sh`): the server repository's test base (its runtime, sqlite3 for
+# a test that changes the store behind the running server as an operator's SQL would, and the release server) and the
+# test relay (src/bin/relay.rs), run in a container of its own beside the server. The context is the relay's binary.
+ARG BASE
+FROM ${BASE}
+COPY chatkord-test-relay /usr/local/bin/chatkord-test-relay

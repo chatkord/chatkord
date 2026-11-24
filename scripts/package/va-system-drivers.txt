@@ -1,0 +1,9 @@
+# The distributions' VA-API driver folders, one a line, which libva searches after the carried one: in the order
+# their own libva searches them (Fedora's with RPM Fusion's folders before its stock one, then Debian's, then Arch's),
+# since libva stops at the first driver that loads. libva is built with them (scripts/package/linux.env), and a start
+# of the window names them after its carried folder (client/media/src/drivers.rs).
+/usr/lib64/dri-nonfree
+/usr/lib64/dri-freeworld
+/usr/lib64/dri
+/usr/lib/x86_64-linux-gnu/dri
+/usr/lib/dri

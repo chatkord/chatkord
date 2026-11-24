@@ -1,0 +1,86 @@
+#version 450
+#extension GL_EXT_samplerless_texture_functions : require
+
+// A screen picture (BGRx or BGRA, any layout the GPU samples) to the two planes of NV12, in one
+// pass, scaled down on the way when the planes are smaller. One invocation takes one pixel of the planes,
+// so neighbouring invocations read neighbouring pixels of the picture; the first of each 2x2 block writes
+// its chroma from the four colours its group shares.
+//
+// The stream is BT.709 in limited range (luma 16..235, chroma 16..240), which is also how the encoder
+// tags it. Chroma is the mean of the block (siting at its centre). Alpha is ignored: a screen is opaque.
+
+// The group size is `GROUP` in `pass.rs`, which sizes the dispatch from it.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Set when the planes are smaller than the picture, whose pixels are then averaged by area; unset, every
+// pixel is read once, exactly, and the planes are the picture's own size.
+layout(constant_id = 0) const bool SCALED = false;
+
+layout(set = 0, binding = 0) uniform texture2D screen;
+// The picture's largest even size: its odd last column or row is never read.
+layout(push_constant) uniform Read {
+  ivec2 extent;
+} read;
+// No format on the planes: FFmpeg's device enables writing a storage image without one (and not the
+// extended formats), and the planes are views of R8 and R8G8.
+layout(set = 0, binding = 1) uniform writeonly image2D luma;
+layout(set = 0, binding = 2) uniform writeonly image2D chroma;
+
+const vec3 KR_KG_KB = vec3(0.2126, 0.7152, 0.0722);
+const float KB = 0.0722;
+const float KR = 0.2126;
+
+// Full-range luma in 0..1 of an RGB triple in 0..1.
+float luma_of(vec3 rgb) {
+  return dot(KR_KG_KB, rgb);
+}
+
+// The colour of the stream's pixel `at` when it covers `scale` of the picture's pixels on each side: the mean of
+// every picture pixel under it, each weighted by how much of it is covered. A thin line is kept as the share of
+// the pixel it fills, where a filtered read or two between pixels can miss it. Nothing past the even extent is read.
+vec3 scaled(ivec2 at, vec2 scale) {
+  vec2 low = vec2(at) * scale;
+  vec2 high = low + scale;
+  ivec2 first = ivec2(floor(low));
+  ivec2 last = min(ivec2(ceil(high)) - 1, read.extent - 1);
+  vec3 sum = vec3(0.0);
+  float covered = 0.0;
+  for (int y = first.y; y <= last.y; y++) {
+    float tall = min(high.y, float(y + 1)) - max(low.y, float(y));
+    for (int x = first.x; x <= last.x; x++) {
+      float weight = tall * (min(high.x, float(x + 1)) - max(low.x, float(x)));
+      sum += texelFetch(screen, ivec2(x, y), 0).rgb * weight;
+      covered += weight;
+    }
+  }
+  return sum / covered;
+}
+
+// Each invocation's colour, for the chroma of its 2x2 block.
+shared vec3 colours[8][8];
+
+void main() {
+  // The stream's size: the picture's even size, or smaller when SCALED.
+  ivec2 size = imageSize(luma);
+  ivec2 at = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 local = ivec2(gl_LocalInvocationID.xy);
+  // Every invocation reaches the barrier: one past the stream reads its last pixel and stores nothing.
+  bool inside = at.x < size.x && at.y < size.y;
+  ivec2 read_at = min(at, size - 1);
+  vec2 scale = vec2(read.extent) / vec2(size);
+  vec3 rgb = SCALED ? scaled(read_at, scale) : texelFetch(screen, read_at, 0).rgb;
+  if (inside) {
+    imageStore(luma, at, vec4(16.0 / 255.0 + (219.0 / 255.0) * luma_of(rgb), 0.0, 0.0, 0.0));
+  }
+  colours[local.y][local.x] = rgb;
+  barrier();
+  if (!inside || (local.x & 1) != 0 || (local.y & 1) != 0) {
+    return;
+  }
+  vec3 mean = (colours[local.y][local.x] + colours[local.y][local.x + 1] + colours[local.y + 1][local.x] +
+               colours[local.y + 1][local.x + 1]) * 0.25;
+  float y = luma_of(mean);
+  float cb = (mean.b - y) / (2.0 * (1.0 - KB));
+  float cr = (mean.r - y) / (2.0 * (1.0 - KR));
+  imageStore(chroma, at / 2, vec4(128.0 / 255.0 + (224.0 / 255.0) * cb, 128.0 / 255.0 + (224.0 / 255.0) * cr, 0.0, 0.0));
+}

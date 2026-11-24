@@ -1,0 +1,7 @@
+# A test waits for what it is waiting for, never for a time: a report of the call, an event, a callback answered over a
+# channel. A source's frame clock is `tokio::time::interval`, which is the source's own clock and no wait.
+disallowed-methods = [
+    { path = "tokio::time::sleep", reason = "wait for the report or event that follows, with a timeout as the bound" },
+    { path = "tokio::time::sleep_until", reason = "wait for the report or event that follows, with a timeout as the bound" },
+    { path = "std::thread::sleep", reason = "wait for the report or event that follows, with a timeout as the bound" },
+]

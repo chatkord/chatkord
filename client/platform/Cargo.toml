@@ -1,0 +1,105 @@
+[package]
+name = "platform"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The desktop operating system's services the client uses, one API with a module per system: the keyring, the system's appearance and one window per user so far"
+
+[dependencies]
+report.workspace = true
+terms = { path = "../terms" }
+design = { path = "../design" }
+screens = { path = "../screens" }
+words = { path = "../words" }
+choices = { path = "../choices" }
+proto.workspace = true
+portrait = { path = "../portrait" }
+notices = { path = "../notices" }
+# `spawn_blocking`: the keyring talks to the system over D-Bus or the OS and must not run on a task that serves sockets.
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+keyring-core.workspace = true
+# The system's colour scheme and reduced motion on Linux (the settings portal), Windows and macOS, on async-io, the
+# keyring's runtime.
+mundy = { version = "0.2.3", default-features = false, features = ["async-io", "callback", "color-scheme", "reduced-motion"] }
+# The file between runs is the shape of the type that reads it, so one of another shape is nothing remembered.
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+# The time zone this device keeps (`zone`), read from the system: the zoneinfo files on Linux, Windows' own zone
+# mapped through the IANA database jiff carries for it; the latest release, at its defaults for that.
+jiff = { workspace = true, features = [
+    "std",
+    "tz-system",
+    "tz-fat",
+    "tzdb-bundle-platform",
+    "tzdb-zoneinfo",
+    "tzdb-concatenated",
+    "perf-inline",
+] }
+# The languages the system names for the person (`language`): Windows' display languages, the locale variables on
+# Linux, as BCP 47 tags; no dependency of its own, MIT or Apache-2.0, the latest release (the shell already builds it
+# through cosmic-text).
+sys-locale = "0.3.2"
+# A link read as a URL before it is opened (`open`), so only http and https leave the window, on every system; and on
+# Linux the portal's file:// answers turned into paths (`pick`, `save`).
+url = "2.5.8"
+# The window `raise` brings forward, by the handles winit publishes for it.
+raw-window-handle = "0.6.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-async-io-crypto-rust"] }
+# The portal's FileChooser (`pick`, `save`), its OpenURI that hands a web link to the browser (`open`), and its
+# Inhibit monitor that tells the session's end (`session`).
+ashpd = { workspace = true, features = ["async-io", "file_chooser", "inhibit", "open_uri"] }
+# The tray icon (`tray`): the StatusNotifierItem and its menu over the zbus the keyring already runs (Unlicense).
+ksni = { version = "0.3.7", default-features = false, features = ["async-io"] }
+# The session monitor's changes arrive as a stream (`session`).
+futures-util.workspace = true
+# The notification server's `Notifications` interface (`notify`) and GNOME's idle monitor (`idle`), over the zbus the
+# keyring and the tray already run, on async-io like theirs.
+zbus = { workspace = true, features = ["async-io"] }
+# Idle on Wayland (`idle`): `ext-idle-notify-v1` on a connection of its own, its socket waited on by the runtime
+# (tokio's `net`), the staging protocols at the release winit already locks.
+wayland-client = "0.31.15"
+wayland-protocols = { version = "0.32.13", features = ["client", "staging"] }
+# A window brought forward with the desktop's token (`raise`): `xdg-activation-v1` on the window's own display, which
+# needs the libwayland backend winit runs on, loaded at run time as the rest of the client loads it.
+wayland-backend = { version = "0.3.17", features = ["client_system", "dlopen"] }
+# Idle on X11 (`idle`): the screen-saver extension's time since the last input.
+x11rb = { version = "0.14.0", default-features = false, features = ["screensaver"] }
+tokio = { workspace = true, features = ["net"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-native-keyring-store = "1.1.0"
+# A later launch knocks on the first run's named pipe (`instance`), served on a runtime of its own.
+tokio = { workspace = true, features = ["net", "io-util"] }
+# One call: a later launch lets the first run take the foreground (`AllowSetForegroundWindow`).
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Power",
+  "Win32_System_Registry",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+# `IFileOpenDialog` (`pick`) is a COM interface `windows-sys` does not bind.
+# `windows` also binds the toast (`notify`): `ToastNotification` with its XML and its `Activated` event, and the
+# process's id for the taskbar (`launcher`), and the routing table's best route to a default (`network`).
+windows = { workspace = true, features = ["Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+# Undoes a helper a test started even when the test crashes.
+testserver = { path = "../testserver" }
+image = { workspace = true, features = ["png"] }
+keyring-core.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+# Reads back what the keyring notes when it fails.
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+
+[lints]
+workspace = true

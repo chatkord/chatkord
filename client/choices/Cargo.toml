@@ -1,0 +1,20 @@
+[package]
+name = "choices"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "What a person chose for this device, as plain values: a share, the camera, the microphone, the look, the startup"
+
+[dependencies]
+# The emoji the picker remembers are the reactions a message is given.
+chat = { path = "../chat" }
+design = { path = "../design" }
+# A volume is kept by the member it is for.
+terms = { path = "../terms" }
+# What the debug report may say of a choice: public facts only, by type.
+report.workspace = true
+# A custom share ceiling is bounded by the most a share is ever sent at, which the protocol's rules own.
+proto.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,6 @@
+# Permanent exceptions to protocol/scripts/privacy/guard.py's own rules: `path rule-id  # reason`. gitleaks' rules keep
+# their allowances in allow.gitleaks.toml beside this. A path ending in / covers the directory. A stale entry fails the
+# gate, so this stays short.
+client/shell/ui/assets/fonts/ unscannable  # the bundled typeface: third-party binary font files (Inter, SIL OFL 1.1, licence beside them)
+client/shell/ui/tests/refs/ unscannable  # reference images: PNG pixels of fixed sample text drawn by the software renderer
+client/shell/assets/icon/ unscannable  # the app icon: PNG and ICO pixels drawn by ui's app_icon example, held to it by a test

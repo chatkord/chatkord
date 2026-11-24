@@ -1,0 +1,68 @@
+[package]
+name = "sound"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's sound on the system's sound server: the devices listed and watched, the window's chimes, a call's microphone and speaker, a share's sound"
+
+[dependencies]
+report.workspace = true
+# The chimes are named by the window's own list of moments.
+screens = { path = "../screens" }
+# The wait before a stream or a sound server is tried again.
+net = { path = "../net" }
+# A share's sound leaves the capture's real-time thread through a ring that neither locks nor allocates, as a call's
+# voice does; the owner thread answers on `oneshot`s and tells device changes on a `watch`.
+rtrb = "0.4.1"
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time"] }
+
+# Linux speaks to PipeWire (`pw`), loaded at run time, so a machine without one is reported, not unbuildable
+[target.'cfg(target_os = "linux")'.dependencies]
+pw = { path = "../pw" }
+# A voice thread names itself to the portal's Realtime by its thread id (`thread`) once the process bounds how long a
+# real-time thread of it may run (`process`: `RLIMIT_RTTIME`)
+rustix = { workspace = true, features = ["std", "process", "thread"] }
+# The portal's Realtime asks for a call's voice threads to run ahead of ordinary work, awaited on the thread that asks,
+# with async-io's own executor, the one ashpd's `async-io` feature already runs on
+ashpd = { workspace = true, features = ["async-io", "realtime"] }
+async-io = "2.6.0"
+
+# A share's sound is WASAPI's process loopback, activated through COM; a call's devices are named from their property
+# store (`FunctionDiscovery`'s key, `PropertiesSystem`'s store)
+[target.'cfg(windows)'.dependencies]
+clock = { path = "../clock" }
+windows = { workspace = true, features = [
+  "Foundation",
+  "Win32_Devices_FunctionDiscovery",
+  "Win32_Devices_Properties",
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_Media_KernelStreaming",
+  "Win32_Media_Multimedia",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+  "Win32_System_Variant",
+  "Win32_UI_Shell_PropertiesSystem",
+] }
+# `implement` (the loopback's activation and the endpoints' notifications are answered on interfaces of ours) names this
+# crate
+windows-core.workspace = true
+
+[dev-dependencies]
+tier = { path = "../tier" }
+# Reads back the log a kept stream writes as it moves.
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
+# The virtual microphone and speaker the lab tests run on.
+testserver = { path = "../testserver" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+[features]
+# A sound owner whose listing a test gives, so no sound server is needed (`Sound::stand_in`).
+testing = []
+
+[lints]
+workspace = true

@@ -1,0 +1,130 @@
+[workspace]
+resolver = "3"
+members = ["webrtc", "rtc", "terms", "words", "choices", "link", "clock", "capture", "sound", "e2e", "media", "net", "pw", "share", "platform", "errands", "design", "chat", "screens", "picture", "portrait", "notices", "call", "cli", "testserver", "tier", "update", "fetch", "shell", "shell/ui"]
+# The window and its components link the whole engine and iced; `cargo build` and `cargo test` at the root leave them
+# to `-p shell` and `--workspace`.
+default-members = ["webrtc", "rtc", "terms", "words", "choices", "link", "clock", "capture", "sound", "e2e", "media", "net", "pw", "share", "platform", "errands", "design", "chat", "screens", "picture", "portrait", "notices", "call", "cli", "testserver", "tier", "update", "fetch"]
+
+[workspace.package]
+license = "GPL-3.0-or-later"
+
+[workspace.dependencies]
+proto = { path = "../protocol/proto" }
+report = { path = "../protocol/report" }
+ffmpeg-sys-next = { version = "9.1.1", default-features = false }
+accesskit = "0.25.2"
+ash = { version = "=0.38.0", default-features = false }
+ashpd = { version = "0.13.13", default-features = false }
+fluent-syntax = "0.12.0"
+futures-util = { version = "0.3.34", default-features = false }
+http-body-util = "0.1.5"
+hyper = { version = "1.12.0", default-features = false }
+hyper-util = { version = "0.1.21", default-features = false }
+image = { version = "0.25.10", default-features = false }
+jiff = { version = "1.0.0", default-features = false }
+keyring-core = "1.0.1"
+libspa = "=0.10.1"
+libwebrtc = "=0.4.1"
+pollster = "1.0.1"
+rcgen = { version = "0.14.10", default-features = false }
+ring = "0.17.14"
+rustix = { version = "1.1.6", default-features = false }
+rustls = { version = "0.23.46", default-features = false }
+serde = "1.0.229"
+serde_json = "1.0.154"
+tokio = "1.54.1"
+tokio-rustls = { version = "0.26.6", default-features = false }
+tracing = "0.1.44"
+windows = "0.62.2"
+windows-core = "0.62.2"
+windows-sys = "0.61.2"
+zbus = { version = "5.19.0", default-features = false }
+zeroize = "1.9.1"
+
+# iced's master, on wgpu 30 like `picture`: 0.14.0 is on wgpu 27 and cannot share the device a picture is imported onto,
+# which the shell's own window loop makes. The revision is stated here once; a member names the crate and adds its
+# features.
+iced_core = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9" }
+iced_widget = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9", default-features = false }
+iced_runtime = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9" }
+iced_graphics = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9" }
+iced_tiny_skia = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9" }
+iced_test = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9" }
+iced_selector = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9" }
+iced_winit = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9", default-features = false }
+iced_wgpu = { git = "https://github.com/iced-rs/iced", rev = "08eb93ad476597889eb4597f22b4198f5545abb9", default-features = false }
+
+# Each git pin and the published release that retires it; scripts/deps/released.py fails once that release is out.
+[workspace.metadata.retired-by]
+iced_core = "0.15.0"
+
+# The pinned engine crates plus patches/webrtc: scripts/deps/webrtc.sh unpacks them against the checksums it states,
+# since the patched lock entries carry none.
+[patch.crates-io]
+libwebrtc = { path = "../build/deps-src/webrtc/patched/libwebrtc" }
+webrtc-sys = { path = "../build/deps-src/webrtc/patched/webrtc-sys" }
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unnameable_types = "warn"
+# cargo-fuzz builds every crate with `--cfg fuzzing`.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+unsafe_op_in_unsafe_fn = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+undocumented_unsafe_blocks = "warn"
+allow_attributes_without_reason = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+dbg_macro = "warn"
+exit = "warn"
+mem_forget = "warn"
+large_futures = "warn"
+large_stack_arrays = "warn"
+unnecessary_safety_comment = "warn"
+string_slice = "warn"
+needless_pass_by_value = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+borrow_as_ptr = "warn"
+ptr_as_ptr = "warn"
+ptr_cast_constness = "warn"
+as_ptr_cast_mut = "warn"
+multiple_unsafe_ops_per_block = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+cast_lossless = "warn"
+allow_attributes = "warn"
+
+# A test binary links the engine and FFmpeg statically and with debug info was about 530 MB, 103 GB of target/ on
+# one machine; `strip` drops the C++ engine's own debug sections at the link, which `debug` cannot reach.
+[profile.dev]
+debug = false
+strip = "debuginfo"
+
+# `design`'s tests search a palette for every accent on the hue circle: 23 s of the gate unoptimised, about 3 s here.
+[profile.dev.package.design]
+opt-level = 3
+
+# Unoptimised, the build script overflows a Windows main thread's 1 MB stack (STATUS_STACK_OVERFLOW). A build script
+# is unoptimised in release too (cargo's `build-override`), so both profiles name it.
+[profile.dev.package.ffmpeg-sys-next]
+opt-level = 3
+
+# One unit, linked whole: the shipped window 18 % smaller and its software render 3 % faster, for about 80 s more
+# on a clean release build (measured on Machine A).
+[profile.release]
+lto = "fat"
+codegen-units = 1
+# Its symbol tables were 12,025,387 B of the release window, and nothing reads a symbol at run time.
+strip = "symbols"
+
+[profile.release.package.ffmpeg-sys-next]
+opt-level = 3

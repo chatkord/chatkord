@@ -1,0 +1,3 @@
+{"rtpParameters": {"mid": "1", "codecs": [
+ {"mimeType": "video/H264", "payloadType": 102, "clockRate": 90000, "parameters": {"packetization-mode": 1, "profile-level-id": "42e01f"}, "rtcpFeedback": []}
+], "headerExtensions": [], "encodings": [{"ssrc": 1, "rtx": {"ssrc": 2}}], "rtcp": {"reducedSize": true}}}

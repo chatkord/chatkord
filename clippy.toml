@@ -1,0 +1,33 @@
+# Written by the protocol repository's scripts/gate/clippy_configs.py from its clippy.toml and each
+# clippy.extra.toml from the root to this directory: edit those, never this.
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-print-in-tests = true
+avoid-breaking-exported-api = false
+
+disallowed-macros = [
+    { path = "tracing::trace", reason = "log with report::note!: its fields are public facts only" },
+    { path = "tracing::debug", reason = "log with report::note!: its fields are public facts only" },
+    { path = "tracing::info", reason = "log with report::note!: its fields are public facts only" },
+    { path = "tracing::warn", reason = "log with report::note!: its fields are public facts only" },
+    { path = "tracing::error", reason = "log with report::note!: its fields are public facts only" },
+    { path = "tracing::event", reason = "log with report::note!: its fields are public facts only" },
+    { path = "tracing::span", reason = "a span's fields bypass report::Public: log with report::note!" },
+    { path = "tracing::trace_span", reason = "a span's fields bypass report::Public: log with report::note!" },
+    { path = "tracing::debug_span", reason = "a span's fields bypass report::Public: log with report::note!" },
+    { path = "tracing::info_span", reason = "a span's fields bypass report::Public: log with report::note!" },
+    { path = "tracing::warn_span", reason = "a span's fields bypass report::Public: log with report::note!" },
+    { path = "tracing::error_span", reason = "a span's fields bypass report::Public: log with report::note!" },
+    { path = "tracing::instrument", reason = "an instrumented function records its arguments, which bypass report::Public" },
+]
+
+disallowed-methods = [
+    { path = "iced_core::color::Color::from_rgb", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_rgba", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_rgb8", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_rgba8", reason = "a colour is a design role: use ui::color" },
+    { path = "iced_core::color::Color::from_linear_rgba", reason = "a colour is a design role: use ui::color" },
+    { path = "winit::window::Window::request_redraw", reason = "a redraw is asked whole or for a picture: use asks::Asking" },
+]

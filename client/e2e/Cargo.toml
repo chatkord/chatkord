@@ -1,0 +1,38 @@
+[package]
+name = "e2e"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's end-to-end tests: a real server process, and calls, screens and voices driven through the product's own call, with nothing here but tests"
+
+[dev-dependencies]
+tier = { path = "../tier" }
+link = { path = "../link", features = ["testing"] }
+terms = { path = "../terms" }
+futures-util.workspace = true
+webrtc = { path = "../webrtc", features = ["testing"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
+# The testing feature gives the DMA-BUF painter the screen tests include its FFmpeg layer.
+media = { path = "../media", features = ["testing"] }
+capture = { path = "../capture", features = ["testing"] }
+sound = { path = "../sound" }
+net = { path = "../net" }
+call = { path = "../call" }
+cli = { path = "../cli" }
+# The command line runs keeping nothing: no folder of this device named.
+platform = { path = "../platform" }
+testserver = { path = "../testserver" }
+screens = { path = "../screens" }
+words = { path = "../words" }
+choices = { path = "../choices" }
+# The face-to-voice measurement reads a decoded picture's planes.
+picture = { path = "../picture" }
+# The fuzz targets' corpus (`fuzz/seeds`), which the tests' fixtures name.
+proto = { workspace = true, features = ["testing"] }
+
+# The screen tests paint a texture on the encoder's D3D11 device where Windows Graphics Capture would draw one
+[target.'cfg(windows)'.dev-dependencies]
+windows = { workspace = true, features = ["Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi_Common"] }
+
+[lints]
+workspace = true

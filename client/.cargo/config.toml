@@ -1,0 +1,23 @@
+# FFmpeg, libva and libdrm come from scripts/deps/ffmpeg.sh, never from the host: the
+# build sees only that prefix, so what is tested is what ships.
+[env]
+# Forced: a shell's own PKG_CONFIG_PATH (Git Bash exports one) would otherwise win.
+PKG_CONFIG_PATH = { value = "../build/deps/lib/pkgconfig", relative = true, force = true }
+# The carried video driver alone for what cargo runs, tests included: libva is linked in, so they open the driver the
+# tree ships, not the distribution's. Its build reads it too: a tree's window run by hand names it first itself.
+LIBVA_DRIVERS_PATH = { value = "../build/deps/lib/dri", relative = true, force = true }
+# The engine scripts/deps/webrtc.sh fetched and checked; the patched build script fetches none.
+LK_CUSTOM_WEBRTC = { value = "../build/deps-src/webrtc/prebuilt", relative = true, force = true }
+
+# lld links the test binaries (a static engine and FFmpeg, ~500 MB each) in under 1 GB where GNU ld
+# thrashes inside the gate's memory ceiling (scripts/gate/gate.sh), and in a fraction of the time.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# The Windows engine is built against the static CRT (`RuntimeLibrary=MT_StaticRelease` in every object
+# of webrtc.lib), and MSVC refuses to link two runtimes; `cc` follows this flag for webrtc-sys's own C++.
+# Every test binary runs from a path that does not change when it is rebuilt, so the firewall asks about it once
+# (scripts/gate/test-run.ps1; the path is relative to client/).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+runner = "../scripts/gate/test-run.cmd"

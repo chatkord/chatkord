@@ -1,0 +1,5 @@
+# What a gate on each system cannot run, whatever it is asked: a pass records these sentences beside it, and a push
+# reports them (protocol/scripts/gate/record.py).
+[systems]
+windows = ["the client's tests on Linux's hardware"]
+linux = ["the client's tests on Windows' hardware and its Windows code"]

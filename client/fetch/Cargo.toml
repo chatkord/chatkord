@@ -1,0 +1,27 @@
+[package]
+name = "fetch"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's bounded HTTPS GET: the update feed's, and a link preview's page and picture"
+
+[dependencies]
+report.workspace = true
+terms = { path = "../terms" }
+hyper = { workspace = true, features = ["client", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+http-body-util.workspace = true
+tokio = { workspace = true, features = ["rt", "time", "net", "io-util"] }
+# The typed link parse the server accepts a span by, so a preview fetches only what a message may name.
+proto.workspace = true
+# The TLS every connection of the client's is secured by: one trust setup.
+link = { path = "../link" }
+
+[dev-dependencies]
+hyper = { workspace = true, features = ["server", "http1"] }
+http-body-util = { workspace = true, features = ["channel"] }
+proto = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["rt", "macros", "time", "net", "io-util", "sync"] }
+
+[lints]
+workspace = true

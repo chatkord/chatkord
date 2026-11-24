@@ -1,0 +1,15 @@
+[package]
+name = "design"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's design tokens: colour roles and the contrast they keep, a server's accent, scale, labels; no toolkit, no OS"
+
+[dependencies]
+
+[dev-dependencies]
+# The palette example reads a colour as the wire writes one; the crate itself stays free of the protocol.
+proto.workspace = true
+
+[lints]
+workspace = true

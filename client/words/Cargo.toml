@@ -1,0 +1,41 @@
+[package]
+name = "words"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "What the window says: each language's catalog, the sentences that name a value, the figures and failures as words"
+
+[features]
+# `Phrase::in_english` and `Sentence::in_english`, which a test of another crate reads its words with, and
+# `Language::given`, a catalog a test brings to see the window change language.
+english = []
+
+[dependencies]
+# The values a person chose are worded here, so what they are stays free of the catalogs.
+choices = { path = "../choices" }
+terms = { path = "../terms" }
+# The bound a phrase is held to, which a catalog's build checks and `Words::label` relies on.
+design = { path = "../design" }
+chat = { path = "../chat" }
+proto.workspace = true
+# The window's words: one language's catalog, its plurals and placeables (Project Fluent); the latest releases.
+fluent-bundle = "0.16.0"
+unic-langid = "0.9.6"
+# Which carried catalog a person's languages ask for (exact, then the likely region's, then the language's), on the
+# `unic-langid` identifier the bundle takes: 0.14 negotiates `icu_locid`'s, which fluent-bundle 0.16 does not take.
+fluent-langneg = "0.13.1"
+# Whether a sentence holds a right-to-left letter, the only line its isolation marks change; the latest release.
+unicode-bidi = "0.3.18"
+
+[build-dependencies]
+design = { path = "../design" }
+# Reads the English catalog to generate `Phrase` and the typed methods; the latest release.
+fluent-syntax.workspace = true
+# Refuses a catalog whose file is not named by a language tag in its canonical form.
+unic-langid = "0.9.6"
+
+[dev-dependencies]
+fluent-syntax.workspace = true
+
+[lints]
+workspace = true

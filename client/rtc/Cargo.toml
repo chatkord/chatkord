@@ -1,0 +1,20 @@
+[package]
+name = "rtc"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The voice surface of the client: mediasoup's parameters turned into the SDP the engine needs, and back"
+
+[dependencies]
+proto.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+libwebrtc.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+# The fuzz targets' corpus.
+proto = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

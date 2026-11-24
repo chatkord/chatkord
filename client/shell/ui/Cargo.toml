@@ -1,0 +1,45 @@
+[package]
+name = "ui"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's components on iced: the theme over the design tokens, the bundled font, and the harness that tests them without a window"
+
+[features]
+# The harness (`ui::testing`): a headless render with pixel access and the reference-image comparator. The
+# shell's own screen tests use it too; the shipped binary does not.
+testing = ["dep:iced_tiny_skia", "dep:iced_runtime", "dep:png"]
+
+[dependencies]
+design = { path = "../../design" }
+terms = { path = "../../terms" }
+screens = { path = "../../screens" }
+words = { path = "../../words" }
+choices = { path = "../../choices" }
+# A server's picture is painted by its file id.
+proto = { path = "../../../protocol/proto" }
+iced_core = { workspace = true, features = ["advanced"] }
+# `canvas`: the connection popover's round-trip graph, as paths (lyon on wgpu, tiny-skia's own in the harness).
+# `image`: pictures the host decoded (a message's thumbnails, a server's emoji), painted from their RGBA handles.
+iced_widget = { workspace = true, features = ["advanced", "svg", "canvas", "image"] }
+iced_tiny_skia = { workspace = true, optional = true, features = ["svg", "geometry", "image"] }
+iced_runtime = { workspace = true, optional = true }
+iced_graphics = { workspace = true, features = ["geometry"] }
+# The app icon drawn from the mark (`app_icon`): the SVG renderer iced's own `svg` feature already builds, at its version.
+resvg = { version = "0.50.0", default-features = false }
+png = { version = "0.18.1", optional = true }
+# The tree a screen reader reads (`access`), made from what each control says of itself: AccessKit's schema, which
+# every system's adapter takes, plain data with no system code (MIT OR Apache-2.0).
+accesskit.workspace = true
+
+[dev-dependencies]
+ui = { path = ".", features = ["testing"] }
+# The fixtures the screens' own tests build their windows from (`screens::harness`).
+screens = { path = "../../screens", features = ["testing"] }
+iced_test.workspace = true
+# The app icon's files: the `.ico` and its PNGs written by the `app_icon` example and read back by its test.
+ico = "0.6.0"
+iced_selector.workspace = true
+
+[lints]
+workspace = true

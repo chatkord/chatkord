@@ -1,0 +1,130 @@
+Chatkord debug report: server
+Created 2026-11-17 10:43 UTC · Chatkord server 0.9.0 (release build)
+
+Build
+  protocol major: 1
+  protocol minor: 0
+  debug assertions: false
+
+System
+  os: linux
+  kernel: 6.17.4-200.fc44.x86_64
+  architecture: x86_64
+  threads available: 8
+  in a container: true
+
+Configuration
+  clients' socket on loopback only: false
+  admin listener on loopback only: true
+  tls: Proxy
+  trusted proxies named: true
+  public address set: true
+  throttle lines name an address: false
+  log format: Text
+  connections: 1024
+  doorway: 256
+  connections per address: 16
+  accepts per second: 10
+  opening, ms: 10000
+  idle, ms: 60000
+  session renewal, ms: 86400000
+  write, ms: 10000
+  op burst: 64
+  ops per second: 16
+  upkeep rest, ms: 900000
+  search fill rest, ms: 3000
+  certificate check rest, ms: 300000
+  upload read, ms: 60000
+  requests per connection: 32
+  sign-ins waiting: 32
+  hashes at once: 4
+  ring bytes: 1048576
+  store readers: 8
+  store write queue: 1024
+  file grace, ms: 3600000
+  account files bytes: 10737418240
+  attachment bytes: 536870912
+  presence tick, ms: 5000
+  picture memory, MiB: 512
+  media port: 40000
+  media on loopback only: false
+  media address announced: true
+  room event backlog: 512
+  media budget, bits a second: 1479330000
+
+Store
+  page size: 4096
+  pages: 105472
+  free pages: 1266
+  bytes: 432013312
+  access_epoch: 1
+  authors: 0
+  categories: 3
+  channel_kinds: 2
+  channel_list: 9
+  channel_member_overwrites: 0
+  channel_overwrites: 4
+  channel_words: 10
+  channels: 9
+  conversation_members: 18
+  conversations: 7
+  emoji: 26
+  file_kinds: 4
+  file_search: 1904
+  files: 1904
+  files_let_go: 0
+  grant_words: 17
+  invites: 3
+  media_types: 4
+  mention_kinds: 5
+  mentions: 311
+  message_files: 1690
+  message_previews: 402
+  message_search: 48210
+  messages: 48210
+  chatkord_migrations: 1
+  notify_channel: 6
+  notify_levels: 3
+  notify_server: 2
+  overwrite_states: 2
+  reactions: 2210
+  role_permissions: 41
+  roles: 4
+  search_pending: 0
+  send_nonces: 64
+  server: 1
+  server_switches: 0
+  session_endings: 5
+  sessions: 31
+  switch_words: 5
+  thread_follows: 22
+  threads: 40
+  timeline_reads: 214
+  timelines: 56
+  timelines_gone: 0
+  tls_identity: 0
+  user_roles: 15
+  users: 12
+  webhooks: 1
+
+Upkeep
+  last run, seconds ago: 412
+  took, milliseconds: 38
+  every step reached the store: true
+  sessions removed: 2
+  messages removed: 0
+  conversations removed: 0
+  files removed: 3
+
+Voice
+  rooms open: 2
+  members in calls: 7
+  budget held, bits a second: 41200000
+
+Voice late replies
+  late replies: 0
+
+Recent log, newest last
+  notes too long to keep: 0
+  10:40:12 info  transport the renewed TLS certificate is presented
+  10:42:58 warn  service an op failed  op=SendMessage  code=9  fault=Writer

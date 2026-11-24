@@ -1,0 +1,63 @@
+# Setup scripts are nextest's one way to give chosen tests an environment; the pinned nextest keeps their shape.
+experimental = ["setup-scripts"]
+
+# A test's tier is the module it is in: one that starts a server is in a `server` module, one
+# that needs hardware in a `lab` module (a lab machine has a server too). `tier` fails a test outside its group.
+# Each server test starts its container at once, and on Windows podman reaches its machine over SSH, whose sshd drops
+# handshakes past ten at a time (MaxStartups 10:30): at twelve at once, a start was refused.
+[test-groups.server]
+max-threads = 8
+
+[test-groups.lab]
+max-threads = "num-cpus"
+
+[[profile.default.overrides]]
+filter = "test(/(^|::)lab::/)"
+test-group = "lab"
+
+[[profile.default.overrides]]
+filter = "test(/(^|::)server::/)"
+test-group = "server"
+
+# A test that asserts a budget of this machine's speed is in a `timing` module, and runs with nothing beside it: beside
+# the whole suite on one integrated GPU, the 4K screen's median call went from 10 ms to 24 ms.
+[[profile.default.overrides]]
+filter = "test(/(^|::)timing::/)"
+threads-required = "num-test-threads"
+
+# A machine with no hardware (CI). nextest allows no group() in a default filter, so the tier's pattern is named again.
+[profile.ci]
+default-filter = "not test(/(^|::)lab::/)"
+
+# A machine with every need: every test, and each lab test's output at the end, so a SKIPPED line is seen.
+[profile.lab]
+
+[[profile.lab.overrides]]
+filter = "test(/(^|::)lab::/)"
+success-output = "final"
+
+# The tests that own Vulkan work of ours run under the validation layer, a validation error ending them; the timing
+# tests do not, since the layer slows every call they time.
+[scripts.setup.vulkan-validation]
+command = "bash ../scripts/vulkan-validation.sh"
+
+# The tests that own D3D work of ours on Windows open their devices under the D3D debug layer, an error it reports
+# ending them; the timing tests do not, for the same reason.
+[scripts.setup.d3d-validation]
+command = "bash ../scripts/d3d-validation.sh"
+
+# GPU-assisted validation sees a shader's stores, at many times the cost: only the tests that ask for it.
+[scripts.setup.vulkan-gpu-validation]
+command = "bash ../scripts/vulkan-validation.sh gpu"
+
+[[profile.lab.scripts]]
+filter = "((package(media) & ((binary(suite) & (test(/^screen::/) | test(/^encode::lab::a_key_frame_asked_for_mid_stream_is_one_a_receiver_can_start_from$/))) | test(/^encode::screen::/))) | package(picture)) & test(/(^|::)lab::/) & not test(/::timing::/) & not test(/::gpu_validated::/)"
+setup = "vulkan-validation"
+
+[[profile.lab.scripts]]
+filter = "package(media) & binary(suite) & test(/^screen::/) & test(/::gpu_validated::/)"
+setup = "vulkan-gpu-validation"
+
+[[profile.lab.scripts]]
+filter = "((package(media) & ((binary(suite) & (test(/^capture_windows::/) | test(/^decode::/))) | test(/^encode::screen::d3d11::/))) | (package(picture) & binary(suite) & (test(/^preview_d3d12::/) | test(/^import_d3d12::/))) | (package(capture) & binary(suite) & test(/^still_windows::/))) & test(/(^|::)lab::/) & not test(/::timing::/)"
+setup = "d3d-validation"

@@ -1,0 +1,46 @@
+[package]
+name = "update"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The client's own update: a release's signed manifest, its package fetched and checked, put in place"
+
+[[bin]]
+name = "release-manifest"
+path = "src/bin/release-manifest.rs"
+
+[dependencies]
+report.workspace = true
+proto.workspace = true
+terms = { path = "../terms" }
+# The bounded GET a feed is fetched with, which a link preview shares.
+fetch = { path = "../fetch" }
+# The connection a feed is fetched over: the system's verifier and TLS 1.3, as every server's (`Trust::secure`).
+link = { path = "../link" }
+# Ed25519 for the manifest's signature and SHA-256 for the package: the crypto TLS already runs on.
+ring.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+# Hexadecimal for a package's digest and base64 for the signing key, strict about case and padding (MIT); in the lock.
+data-encoding = "2.11.1"
+# The package's file beside the AppImage: removed on every way out but its rename into place (MIT OR Apache-2.0).
+tempfile = "3.27.0"
+zeroize.workspace = true
+hyper = { workspace = true, features = ["client", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+http-body-util.workspace = true
+tokio = { workspace = true, features = ["rt", "time", "net", "fs", "io-util"] }
+
+[dev-dependencies]
+# The fuzz targets' corpus.
+proto = { workspace = true, features = ["testing"] }
+hyper = { workspace = true, features = ["server", "http1"] }
+# A body sent in parts with no length stated, as a release host's may come.
+http-body-util = { workspace = true, features = ["channel"] }
+rcgen = { workspace = true, features = ["crypto", "ring"] }
+rustls = { workspace = true, features = ["ring", "std"] }
+tokio-rustls = { workspace = true, features = ["ring"] }
+tokio = { workspace = true, features = ["rt", "macros", "time", "net", "fs", "io-util", "test-util"] }
+
+[lints]
+workspace = true

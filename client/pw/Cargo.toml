@@ -1,0 +1,32 @@
+[package]
+name = "pw"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "The PipeWire client capture and the window's sounds need and libpulse's device list, loaded at run time because libwebrtc's own stubs shadow a linked library"
+
+# Linux only: PipeWire is the screen cast's transport there.
+[target.'cfg(target_os = "linux")'.dependencies]
+# The types and constants of the C headers, read from the installed ones when this builds. No function of it is
+# called: nothing is resolved at link time, so nothing here is shadowed.
+pipewire-sys = "=0.10.1"
+libspa-sys = "=0.10.1"
+# The audio format a share's sound is captured in and a sound is played in, serialised as a pod.
+libspa = { workspace = true, features = ["v0_3_33"] }
+libloading = "0.9.1"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# A test binary that links libwebrtc carries its PipeWire stubs, which run-time loading exists for; only a
+# reference to `pw_init` pulls them in.
+webrtc = { path = "../webrtc", features = ["testing"] }
+pipewire-sys = "=0.10.1"
+# Undoes a helper a test started even when the test crashes.
+testserver = { path = "../testserver" }
+# The virtual speaker's recorder is waited on in async.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+[dev-dependencies]
+tier = { path = "../tier" }
+
+[lints]
+workspace = true

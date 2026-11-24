@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Chatkord <noreply@example.invalid>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] adm-restart: the audio device comes back for the next call
+
+libwebrtc terminates the media engine when its last peer connection is
+destroyed and initializes it again for the next one. AdmProxy's Init was
+a no-op, so the synthetic device's 10 ms pull never restarted and no
+received track was handed a frame again until the process restarted.
+Measured: a debugger on the window saw ~PeerConnection reach
+SyntheticAudioDevice::Terminate as the call was left; the next call
+received nothing, and the thread named SyntheticAudioD was gone.
+
+Init now initializes the sub ADMs again; both are idempotent.
+
+diff --git a/webrtc-sys/src/adm_proxy.cpp b/webrtc-sys/src/adm_proxy.cpp
+index 2b4eacf..8acc700 100644
+--- a/webrtc-sys/src/adm_proxy.cpp
++++ b/webrtc-sys/src/adm_proxy.cpp
+@@ -351,8 +351,19 @@ int32_t AdmProxy::RegisterAudioCallback(webrtc::AudioTransport* transport) {
+ }
+ 
+ int32_t AdmProxy::Init() {
+-  // Init is a no-op - the sub ADMs are initialized at creation time
+-  return 0;
++  // The engine terminates its device after its last connection and initializes
++  // it for the next, so the sub ADMs come back here; both Inits are idempotent.
++  return RunOnWorker([this] {
++    RTC_DCHECK_RUN_ON(worker_thread_);
++    int32_t result = synthetic_adm_ ? synthetic_adm_->Init() : 0;
++    // The engine aborts on a failed Init: a platform ADM that cannot come back
++    // is logged and left out, as at its creation, and the synthetic one serves.
++    if (platform_adm_ && platform_adm_->Init() != 0) {
++      RTC_LOG(LS_ERROR) << "AdmProxy: Platform ADM Init() failed again";
++      platform_adm_ = nullptr;
++    }
++    return result;
++  });
+ }
+ 
+ int32_t AdmProxy::Terminate() {

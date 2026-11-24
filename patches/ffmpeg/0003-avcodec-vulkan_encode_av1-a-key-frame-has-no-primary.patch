@@ -1,0 +1,26 @@
+From 1374753aabc317ab01f44d19dc442997315156eb Mon Sep 17 00:00:00 2001
+From: Chatkord <chatkord@example.invalid>
+Subject: [PATCH 3/4] avcodec/vulkan_encode_av1: a key frame has no primary
+ reference frame
+
+A key frame refers to no other frame, so its reference name slots are
+all unset, but primary_ref_frame was left at 0, naming the first of
+them (VUID-VkVideoEncodeAV1PictureInfoKHR-pStdPictureInfo-10291). It is
+now PRIMARY_REF_NONE, as the AV1 specification has an intra frame's.
+---
+ libavcodec/vulkan_encode_av1.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/libavcodec/vulkan_encode_av1.c b/libavcodec/vulkan_encode_av1.c
+index d387acf..f2182b5 100644
+--- a/libavcodec/vulkan_encode_av1.c
++++ b/libavcodec/vulkan_encode_av1.c
+@@ -352,6 +352,8 @@ static int init_pic_params(AVCodecContext *avctx, FFHWBaseEncodePicture *pic,
+         av_assert0(pic->nb_refs[0] == 0 || pic->nb_refs[1]);
+         ap->av1pic_info.frame_type = STD_VIDEO_AV1_FRAME_TYPE_KEY;
+         ap->av1pic_info.refresh_frame_flags = 0xFF;
++        /* No reference to take the context from (VUID-10291) */
++        ap->av1pic_info.primary_ref_frame = STD_VIDEO_AV1_PRIMARY_REF_NONE;
+         quantization->base_q_idx = enc->q_idx_idr;
+         ap->slot = 0;
+         ap->last_idr_frame = pic->display_order;

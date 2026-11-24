@@ -1,5 +1,5 @@
 //! `latest.json`: a release's version and each system's package, and its signature, `latest.json.sig`. One type
-//! writes and signs it for a release and verifies and reads it for a client, so the two cannot disagree on its form.
+//! writes it for a release and verifies and reads it for a client, so the two cannot disagree on its form.
 //!
 //! The JSON is read only after the signature over its exact bytes holds. A field or a system this build does not know
 //! is passed over, so a later release may add one; a system listed twice is refused.
@@ -52,8 +52,15 @@ impl Manifest {
         self.packages.get(&platform)
     }
 
-    /// The manifest written and signed by `key`. Its text is within [`MAX_MANIFEST_BYTES`] by its parts' bounds.
+    /// The manifest written and signed by `key`.
     pub fn sign(&self, key: &SigningKey) -> Result<Signed, UpdateError> {
+        let manifest = self.text()?;
+        let signature = key.sign(&manifest);
+        Ok(Signed { manifest, signature })
+    }
+
+    /// `latest.json`'s exact bytes, which its signature is over. Within [`MAX_MANIFEST_BYTES`] by its parts' bounds.
+    pub fn text(&self) -> Result<Vec<u8>, UpdateError> {
         let packages = self
             .packages
             .iter()
@@ -69,8 +76,7 @@ impl Manifest {
         let whole = Whole { version: self.version.to_string(), packages };
         let mut manifest = serde_json::to_vec_pretty(&whole).map_err(|_| UpdateError::Malformed)?;
         manifest.push(b'\n');
-        let signature = key.sign(&manifest);
-        Ok(Signed { manifest, signature })
+        Ok(manifest)
     }
 
     /// The manifest `bytes` are, once `signature` is `key`'s over exactly them; nothing of them is read before.

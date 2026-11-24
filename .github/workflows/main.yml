@@ -3,7 +3,8 @@ name: main
 # What reaches main is released only once the commit's tree is one CI's gate passed (scripts/ci/gated.py: no run, only
 # the results of the pull request's). release-please keeps a release pull request open from the Conventional Commits
 # on main; merging it tags `v<version>`, and the client's packages are built from the commit the release names, then
-# attached to its GitHub Release with their sums and, while the signing key is set, the signed update manifest
+# attached to its GitHub Release with their sums and the update manifest, signed by sign.yml with the `release`
+# environment's key.
 # A tag pushed with GITHUB_TOKEN starts no workflow, which is why the packages are
 # jobs here and not workflows of their own.
 on:
@@ -154,19 +155,18 @@ jobs:
           compression-level: 0
           retention-days: 7
 
-  # Without the signing key a release carries no update manifest, so the channel offers no update from it.
-  publish-client:
+  # The update manifest of both packages, written by the client's own writer in the builder; no key is in this job.
+  manifest:
     needs: [release, builder, package-linux, package-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
       packages: read
     env:
       TAG: ${{ needs.release.outputs.tag }}
       CHATKORD_CONTAINER: docker
       BUILDER: ${{ needs.builder.outputs.image }}
-      HAVE_RELEASE_KEY: ${{ secrets.CHATKORD_RELEASE_KEY != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,7 +177,12 @@ jobs:
           pattern: package-*
           merge-multiple: true
           path: dist
-      - name: Sum the packages
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write the update manifest
         run: |
           version="${TAG#v}"
           shopt -s nullglob
@@ -185,39 +190,55 @@ jobs:
           if (( ${#appimage[@]} != 1 || ${#setup[@]} != 1 )); then
             echo "::error::the packages are not one AppImage and one setup of $version: $(cd dist && echo *)"; exit 1
           fi
-          (cd dist && sha256sum -- "${appimage[0]#dist/}" "${setup[0]#dist/}" > SHA256SUMS)
-          cat dist/SHA256SUMS
-          { echo "VERSION=$version"; echo "APPIMAGE=${appimage[0]}"; echo "SETUP=${setup[0]}"; } >> "$GITHUB_ENV"
-      - if: env.HAVE_RELEASE_KEY == 'true'
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # Built before the key is given, so no build script ever runs beside it.
-      - name: Build the manifest's writer
-        if: env.HAVE_RELEASE_KEY == 'true'
-        run: |
-          CHATKORD_BUILDER="${BUILDER%:*}" scripts/ci/builder.sh run \
-            cargo build --locked --manifest-path client/Cargo.toml -p update --bin release-manifest
-      - name: Write and sign the update manifest
-        if: env.HAVE_RELEASE_KEY == 'true'
-        env:
-          CHATKORD_RELEASE_KEY: ${{ secrets.CHATKORD_RELEASE_KEY }}
-        run: |
+          mkdir manifest
+          # shellcheck disable=SC2016 # expanded by the builder's bash
           CHATKORD_BUILDER="${BUILDER%:*}" scripts/ci/builder.sh run bash -c \
-            '"$CARGO_TARGET_DIR/debug/release-manifest" --version "$1" --out dist "$2" "$3"' \
-            _ "$VERSION" "$APPIMAGE" "$SETUP"
-      - name: Attach the packages and their sums to the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "$APPIMAGE" "$SETUP" dist/SHA256SUMS
-      # A client reads the manifest, then its signature: the signature is there first.
-      - name: Attach the signed update manifest
-        if: env.HAVE_RELEASE_KEY == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            'cargo build --locked --manifest-path client/Cargo.toml -p update --bin release-manifest &&
+             "$CARGO_TARGET_DIR/debug/release-manifest" --version "$1" --out manifest "$2" "$3"' \
+            _ "$version" "${appimage[0]}" "${setup[0]}"
+          cat manifest/latest.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: manifest
+          path: manifest/latest.json
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    needs: [release, manifest]
+    uses: ./.github/workflows/sign.yml
+    permissions:
+      contents: read
+    with:
+      environment: release
+      tag: ${{ needs.release.outputs.tag }}
+
+  # The packages, their sums and the signed manifest attached to the release; a client reads the manifest, then its
+  # signature, so the signature is there first.
+  publish-client:
+    needs: [release, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed
+          path: dist
+      - name: Attach the packages, their sums and the signed manifest
         run: |
+          shopt -s nullglob
+          packages=(dist/*.AppImage dist/*.exe)
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "${packages[@]}" dist/SHA256SUMS
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/latest.json.sig
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/latest.json
 

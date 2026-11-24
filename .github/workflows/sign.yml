@@ -1,0 +1,110 @@
+name: sign
+
+# An update manifest signed where no build ever ran: this job builds nothing, runs no container and checks out only
+# the channel's public key, so the signing key never sits beside code a dependency wrote. It takes the caller's
+# artifacts `package-*` (the packages) and `manifest` (their unsigned latest.json, the client's own writer's), checks
+# that the manifest names exactly those packages at their size and SHA-256 and has no field it does not check, signs
+# its exact bytes with the runner's OpenSSL and checks the signature against the committed public key, which also
+# catches a wrong key in the environment. It leaves the artifact `signed`: latest.json, latest.json.sig and SHA256SUMS.
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "The environment holding the channel's key: release (main) or dev-release (develop)"
+        required: true
+        type: string
+      tag:
+        description: "The release's tag, v<version>, whose version the manifest must say"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: The channel's public key
+        id: channel
+        run: |
+          case "$ENVIRONMENT" in
+            release) echo "key=client/update/release.pub" >> "$GITHUB_OUTPUT" ;;
+            dev-release) echo "key=client/update/dev.pub" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::no channel signs from the environment $ENVIRONMENT"; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: ${{ steps.channel.outputs.key }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+          path: tree
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: manifest
+          path: dist
+      - name: Check the manifest names exactly these packages
+        run: |
+          python3 -I - "${TAG#v}" dist <<'EOF'
+          import hashlib, json, pathlib, sys
+          version, dist = sys.argv[1], pathlib.Path(sys.argv[2])
+          manifest = json.loads((dist / "latest.json").read_bytes())
+          # A field this job does not check would be signed unread.
+          entries = manifest["packages"].values()
+          if set(manifest) != {"version", "packages"} or any(set(e) != {"file", "size", "sha256"} for e in entries):
+              sys.exit("::error::the manifest has a field this job does not check")
+          if manifest["version"] != version:
+              sys.exit(f"::error::the manifest says {manifest['version']}, the release is {version}")
+          handed = sorted(p.name for p in dist.iterdir() if p.name != "latest.json")
+          listed = sorted(entry["file"] for entry in entries)
+          if handed != listed:
+              sys.exit(f"::error::the manifest lists {listed}, the packages handed over are {handed}")
+          sums = []
+          for entry in entries:
+              data = (dist / entry["file"]).read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              if (len(data), digest) != (entry["size"], entry["sha256"]):
+                  sys.exit(f"::error::{entry['file']} is not the size and SHA-256 the manifest says")
+              sums.append(f"{digest}  {entry['file']}\n")
+          (dist / "SHA256SUMS").write_text("".join(sorted(sums, key=lambda line: line.split()[1])))
+          EOF
+          cat dist/SHA256SUMS
+      # The key reaches OpenSSL through a pipe, never a file or a command line.
+      - name: Sign the manifest
+        env:
+          KEY: ${{ secrets.CHATKORD_RELEASE_KEY }}
+        run: |
+          if [[ -z "$KEY" ]]; then echo "::error::the $ENVIRONMENT environment holds no CHATKORD_RELEASE_KEY"; exit 1; fi
+          openssl pkeyutl -sign -rawin -keyform DER -inkey <(printf '%s' "$KEY" | base64 -d) \
+            -in dist/latest.json -out dist/latest.json.sig
+      # The committed public key as DER: Ed25519's SubjectPublicKeyInfo prefix, then its 32 raw bytes.
+      - name: Check the signature against the committed public key
+        env:
+          PUBLIC: tree/${{ steps.channel.outputs.key }}
+        run: |
+          if [[ "$(stat -c %s "$PUBLIC")" != 32 || "$(stat -c %s dist/latest.json.sig)" != 64 ]]; then
+            echo "::error::the public key is not 32 bytes or the signature not 64"; exit 1
+          fi
+          openssl pkeyutl -verify -rawin -pubin -keyform DER \
+            -inkey <({ printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; cat "$PUBLIC"; }) \
+            -in dist/latest.json -sigfile dist/latest.json.sig
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed
+          path: |
+            dist/latest.json
+            dist/latest.json.sig
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7

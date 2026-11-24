@@ -33,12 +33,33 @@ env:
   # A 4-core, 16 GB runner: three clippy jobs and two test links at about 1.1 GB each.
   GATE_CHECK_JOBS: "3"
   GATE_BUILD_JOBS: "2"
-  # The private terms the privacy guard reads; a fork's pull request is given no
-  # secret, so the guard says it did not run them rather than failing.
-  PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
-  PRIVACY_TERMS_UNAVAILABLE: ${{ github.event.pull_request.head.repo.fork && '1' || '' }}
+  # The private terms reach only the privacy job, never a job that runs a build script; every other run of
+  # the guard says it did not read them rather than failing.
+  PRIVACY_TERMS_UNAVAILABLE: "1"
 
 jobs:
+  # The privacy guard over the private terms, in a job of its own: it restores no cache and installs only gitleaks, so
+  # no code a dependency wrote runs on this runner before the secret does.
+  privacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
+        with:
+          install_args: aqua:gitleaks/gitleaks
+          cache: false
+      # A fork's pull request is given no secret, so its guard says it did not read the terms.
+      - name: The privacy guard, with the private terms
+        env:
+          PRIVACY_TERMS: ${{ secrets.PRIVACY_TERMS }}
+          PRIVACY_TERMS_UNAVAILABLE: ${{ github.event.pull_request.head.repo.fork && '1' || '' }}
+          MISE_AUTO_INSTALL: "false"
+        run: bash protocol/scripts/privacy/run.sh
+
   # Everything that builds nothing: the privacy guard, formatting, links, the lints, dependencies.
   lint:
     runs-on: ubuntu-latest
@@ -185,7 +206,7 @@ jobs:
 
   # The one check the ruleset requires (.github/rulesets/main.json): every job above passed or was not needed.
   conclusion:
-    needs: [lint, changes, builder, linux, windows]
+    needs: [privacy, lint, changes, builder, linux, windows]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

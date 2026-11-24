@@ -40,7 +40,7 @@ machine() {
       { echo "FAIL: Podman's machine $name did not start"; exit 1; }
     return
   done <<< "$list"
-  echo "FAIL: Podman has no machine here; make one with `podman machine init`"
+  echo "FAIL: Podman has no machine here; make one with 'podman machine init'"
   exit 1
 }
 case "$(uname -s)" in MINGW* | MSYS*) if [[ "$runtime" == podman ]]; then machine; fi ;; esac
@@ -79,10 +79,10 @@ case "${1:-}" in
     else
       args+=(-v /var/run/docker.sock:/var/run/docker.sock --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)")
     fi
-    # Passed by name, so a value (the privacy terms, the release's signing key) is never on a command line.
+    # Passed by name, so no value is ever on a command line; no secret is passed: none reaches a build.
     passed=(GATE_BUILD_JOBS GATE_CHECK_JOBS NEXTEST_PROFILE CARGO_INCREMENTAL CARGO_PROFILE_DEV_DEBUG CARGO_LOG
-      GATE_NO_CONTAINERS GATE_WORKSPACES GATE_KEEP_GOING CI PRIVACY_TERMS PRIVACY_TERMS_UNAVAILABLE CHATKORD_UPDATES
-      CHATKORD_RELEASE_KEY CHATKORD_VERSION CHATKORD_SERVER_BASE)
+      GATE_NO_CONTAINERS GATE_WORKSPACES GATE_KEEP_GOING CI PRIVACY_TERMS_UNAVAILABLE CHATKORD_UPDATES
+      CHATKORD_VERSION CHATKORD_SERVER_BASE)
     for var in "${passed[@]}"; do
       [[ -n "${!var:-}" ]] && args+=(-e "$var")
     done

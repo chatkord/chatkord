@@ -47,10 +47,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # Every commit and tag, as a person's own gate sees them.
         with:
+          submodules: true
           fetch-depth: 0
-      - uses: ./.github/actions/protocol
-        with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
       - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
       - run: mise run gate:fast
 
@@ -63,10 +61,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0
-      - uses: ./.github/actions/protocol
-        with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
       - id: reached
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -102,10 +98,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0
-      - uses: ./.github/actions/protocol
-        with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
       - name: Free the runner's disk
         run: scripts/ci/free-disk.sh
       - name: Log in to GHCR and pull the builder
@@ -159,10 +153,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           fetch-depth: 0
-      - uses: ./.github/actions/protocol
-        with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
       - uses: ./.github/actions/windows-build
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

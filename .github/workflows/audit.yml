@@ -25,9 +25,8 @@ jobs:
       manifests: ${{ steps.list.outputs.manifests }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/protocol
         with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+          submodules: true
       - id: list
         run: |
           manifests=$(git ls-files -- '*Cargo.lock' | sed 's|Cargo.lock$|Cargo.toml|' | jq -Rnc '[inputs]')
@@ -42,9 +41,8 @@ jobs:
         manifest: ${{ fromJSON(needs.workspaces.outputs.manifests) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/protocol
         with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+          submodules: true
       # Both client manifests patch the pinned engine crates to the unpacked source under
       # build/deps-src/webrtc, so cargo cannot read their graph before that unpack exists.
       - if: startsWith(matrix.manifest, 'client/')
@@ -66,7 +64,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/protocol
         with:
-          token: ${{ secrets.PROTOCOL_READ_TOKEN }}
+          submodules: true
       - run: python3 scripts/deps/released.py

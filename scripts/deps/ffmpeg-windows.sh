@@ -11,6 +11,13 @@
 # share/licenses).
 set -euo pipefail
 
+# A step's output kept and shown only when it fails, so a log says why without carrying every build's.
+quiet() {
+  local log
+  log=$(mktemp)
+  if "$@" > "$log" 2>&1; then rm -f "$log"; else local failed=$?; cat "$log"; rm -f "$log"; return "$failed"; fi
+}
+
 # Each pin is a tag AND the commit it must be, so a moved tag fails the build instead of changing it.
 NVCODEC_TAG=n13.1.15.0;         NVCODEC_COMMIT=0a6fba9a2820628b8103464f4c8753ee05838baa
 AMF_TAG=v1.5.3;                 AMF_COMMIT=57ee0cfb0e1a08d9041f77435653794c1b012be0
@@ -85,7 +92,7 @@ export PATH
 
 # NVENC: the headers only; the driver is loaded at run time.
 fetch nv-codec-headers https://github.com/FFmpeg/nv-codec-headers.git "$NVCODEC_TAG" "$NVCODEC_COMMIT"
-make -s -C "$SRC/nv-codec-headers" PREFIX="$PREFIX" install >/dev/null
+quiet make -s -C "$SRC/nv-codec-headers" PREFIX="$PREFIX" install
 # nv-codec-headers has no licence file: its text is the header's.
 mkdir -p "$PREFIX/share/licenses/nv-codec-headers"
 sed -n '/This copyright notice/,/^ \*\/$/p' "$SRC/nv-codec-headers/include/ffnvcodec/nvEncodeAPI.h" \
@@ -101,18 +108,18 @@ licence amf LICENSE.txt
 # under `if(MSVC)` before project() defines MSVC, so its static runtime needs the policy from here.
 fetch libvpl https://github.com/intel/libvpl.git "$LIBVPL_TAG" "$LIBVPL_COMMIT"
 made_here "$SRC/libvpl/build"
-cmake -S "$SRC/libvpl" -B "$SRC/libvpl/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+quiet cmake -S "$SRC/libvpl" -B "$SRC/libvpl/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PREFIX" \
   -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DUSE_MSVC_STATIC_RUNTIME=ON -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DBUILD_SHARED_LIBS=OFF \
-  -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DINSTALL_EXAMPLES=OFF -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=ON >/dev/null
-cmake --build "$SRC/libvpl/build" --target install >/dev/null
+  -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DINSTALL_EXAMPLES=OFF -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=ON
+quiet cmake --build "$SRC/libvpl/build" --target install
 licence libvpl LICENSE
 
 # AV1's software fallback, as on Linux (ffmpeg.sh says why the mirror and why nasm).
 fetch dav1d https://github.com/videolan/dav1d.git "$DAV1D_TAG" "$DAV1D_COMMIT"
 made_here "$SRC/dav1d/build-msvc"
-CC=cl meson setup --reconfigure "$SRC/dav1d/build-msvc" "$SRC/dav1d" --prefix="$PREFIX" "${DAV1D_FLAGS[@]}" \
-  -Db_vscrt=mt >/dev/null
-ninja -C "$SRC/dav1d/build-msvc" install >/dev/null
+quiet env CC=cl meson setup --reconfigure "$SRC/dav1d/build-msvc" "$SRC/dav1d" --prefix="$PREFIX" "${DAV1D_FLAGS[@]}" \
+  -Db_vscrt=mt
+quiet ninja -C "$SRC/dav1d/build-msvc" install
 # meson names a static library libdav1d.a with MSVC too; MSVC's link looks for dav1d.lib.
 cp "$PREFIX/lib/libdav1d.a" "$PREFIX/lib/dav1d.lib"
 licence dav1d COPYING
@@ -120,21 +127,21 @@ licence dav1d COPYING
 # AV1's software encoder, as on Linux (ffmpeg.sh says why the RTC build).
 fetch svt-av1 https://gitlab.com/AOMediaCodec/SVT-AV1.git "$SVT_AV1_TAG" "$SVT_AV1_COMMIT"
 made_here "$SRC/svt-av1/build-msvc"
-cmake -S "$SRC/svt-av1" -B "$SRC/svt-av1/build-msvc" -G Ninja -DCMAKE_INSTALL_PREFIX="$PREFIX" "${SVT_AV1_FLAGS[@]}" \
-  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded >/dev/null
-cmake --build "$SRC/svt-av1/build-msvc" --target install >/dev/null
+quiet cmake -S "$SRC/svt-av1" -B "$SRC/svt-av1/build-msvc" -G Ninja -DCMAKE_INSTALL_PREFIX="$PREFIX" "${SVT_AV1_FLAGS[@]}" \
+  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+quiet cmake --build "$SRC/svt-av1/build-msvc" --target install
 licence svt-av1 LICENSE.md PATENTS.md
 
 # H.264's software encoder, as on Linux (ffmpeg.sh says why the stable branch), against the static CRT: its configure
 # names no C library of its own for MSVC, so -MT is passed as every library here is built.
 fetch_branch x264 https://code.videolan.org/videolan/x264.git "$X264_BRANCH" "$X264_COMMIT"
-(cd "$SRC/x264" && CC=cl ./configure --prefix="$PREFIX" "${X264_FLAGS[@]}" --extra-cflags=-MT \
-  >/dev/null && make -j "$JOBS" >/dev/null && make install-lib-static >/dev/null)
+(cd "$SRC/x264" && quiet env CC=cl ./configure --prefix="$PREFIX" "${X264_FLAGS[@]}" --extra-cflags=-MT &&
+  quiet make -j "$JOBS" && quiet make install-lib-static)
 licence x264 COPYING
 
 fetch_ffmpeg "$SRC/ffmpeg"
 cd "$SRC/ffmpeg"
-./configure --prefix="$PREFIX" --toolchain=msvc --target-os=win64 --arch=x86_64 --pkg-config=pkgconf \
+quiet ./configure --prefix="$PREFIX" --toolchain=msvc --target-os=win64 --arch=x86_64 --pkg-config=pkgconf \
   --extra-cflags="-MT -I$PREFIX/include" --extra-libs="ole32.lib advapi32.lib gdi32.lib uuid.lib" \
   --enable-shared --disable-static "${FFMPEG_FLAGS[@]}" \
   --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-nvenc --enable-amf --enable-libvpl \
@@ -143,9 +150,9 @@ cd "$SRC/ffmpeg"
   --enable-decoder=$FFMPEG_DECODERS \
   --enable-hwaccel=h264_d3d11va,h264_d3d11va2,av1_d3d11va,av1_d3d11va2,h264_d3d12va,av1_d3d12va \
   --enable-parser=$FFMPEG_PARSERS --enable-bsf=$FFMPEG_BSFS \
-  --enable-filter=$FFMPEG_FILTERS >/dev/null
-make -j "$JOBS" >/dev/null
-make install >/dev/null
+  --enable-filter=$FFMPEG_FILTERS
+quiet make -j "$JOBS"
+quiet make install
 # FFmpeg puts the import libraries beside the DLLs; its .pc files name lib/.
 for lib in avcodec avfilter avutil swscale; do mv -f "$PREFIX/bin/$lib.lib" "$PREFIX/lib/"; done
 licence ffmpeg COPYING.GPLv2 LICENSE.md

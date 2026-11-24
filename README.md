@@ -127,6 +127,8 @@ cargo run --release -p cli -- watch example.invalid friend 1 --stream watch.h264
 
 ## Working on it
 
+Pull requests from outside are not taken for now; an issue is welcome.
+
 ```
 mise run hooks          # once: the git hooks
 mise run gate           # the gate, before every push (gate:fast before every commit)

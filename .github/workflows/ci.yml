@@ -1,9 +1,9 @@
 name: gate
 
 # CI as tiers: checks that build nothing, then each workspace a pull request reaches, linted and
-# tested on Linux in the builder image and on Windows, and one `conclusion` the ruleset requires. The local gate runs
-# before every push, so CI proves a change once, where it reaches main; a prose-only pull request is covered by the local
-# gate's link check. main.yml releases only a tree this gate passed, these paths aside (scripts/ci/gated.py reads them
+# tested on Linux in the builder image and on Windows, and one `conclusion` the ruleset requires. CI proves a change
+# once, where it reaches main; a prose-only pull request is covered by the link check gate:fast runs at each commit.
+# main.yml releases only a tree this gate passed, these paths aside (scripts/ci/gated.py reads them
 # from here).
 on:
   pull_request:

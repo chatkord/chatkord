@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# A dev release (`mise run release:dev`), one per gated commit, as the next release's pre-release
+# A dev release (`mise run release:dev`), one per commit, as the next release's pre-release
 # (scripts/release/next.py --dev): the GitHub pre-release `v<version>` at HEAD with the AppImage
 # (scripts/package/linux.sh) and the SHA256SUMS of what it carries. The Windows setup joins it from a Windows machine
-# (scripts/release/dev-windows.sh). Only a clean tree whose gate passed whole is built, by the pre-push hook's own rule
-# (protocol/scripts/gate/pushed.sh), so a dev release is never ungated.
+# (scripts/release/dev-windows.sh). Only a clean tree is built, so the build is HEAD's; it asks for no gate, which is
+# main's.
 #
 # Usage: scripts/release/dev.sh   (log in to gh first; a container runtime as scripts/ci/builder.sh needs)
 # Output: the pre-release made.
@@ -15,8 +15,6 @@ cd "$(dirname "$0")/../.."
 
 [[ -z "$(git status --porcelain)" ]] || { echo "FAIL: the tree is not clean, so its build would not be HEAD's"; exit 1; }
 head="$(git rev-parse HEAD)"
-# As a push of HEAD would be asked: it says the pass, or refuses with the hook's sentence.
-bash protocol/scripts/gate/pushed.sh <<< "HEAD $head HEAD $(printf '%040d' 0)"
 # Every release and dev release made so far, so the next is counted from the last and HEAD's own is seen.
 git fetch --quiet --tags origin
 # GitHub tags only a commit it has.

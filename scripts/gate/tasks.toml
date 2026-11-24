@@ -1,4 +1,4 @@
-# The gate: `mise run gate` before every push, `mise run gate:fast` before every commit.
+# The gate: `mise run gate` on demand and before main, `mise run gate:fast` before every commit.
 # Each task is one bash script (Git Bash on Windows) under scripts/gate, so the same line runs under sh and cmd.
 ["gate:fast"]
 description = "The git hooks, the privacy guard, formatting, links, the lints and dependencies"
@@ -64,10 +64,10 @@ run = "bash scripts/gate/fuzz.sh"
 description = "AddressSanitizer: `fuzz [SECONDS]` the software decoder, or `lab` the media, pw and picture lab tests"
 run = "bash scripts/gate/sanitize.sh"
 
-# Not a stage: a dev release of HEAD, once its gate passed; here, since a file of its own would be one more include in
+# Not a stage: a dev release of HEAD; here, since a file of its own would be one more include in
 # mise.toml, which the builder image is made from.
 ["release:dev"]
-description = "HEAD's dev release, once its gate passed: a GitHub pre-release with the AppImage"
+description = "HEAD's dev release: a GitHub pre-release with the AppImage"
 run = "bash scripts/release/dev.sh"
 
 # Not a stage: the Windows setup added to the dev release TAG, on a Windows machine at its commit.

@@ -9,7 +9,7 @@ pre-commit:
     # What gate:fast leaves to the gate, as it builds: clippy over the packages the commit touches and their dependents.
     clippy:
       run: bash scripts/gate/clippy-touched.sh
-# The tip of each ref pushed passed the gate whole (protocol/scripts/gate/record.py).
+# A push to main only of a tip that passed the gate whole (protocol/scripts/gate/record.py).
 pre-push:
   commands:
     gated:

@@ -131,7 +131,7 @@ Pull requests from outside are not taken for now; an issue is welcome.
 
 ```
 mise run hooks          # once: the git hooks
-mise run gate           # the gate, before every push (gate:fast before every commit)
+mise run gate           # the gate, on demand and before main (gate:fast before every commit)
 ```
 
 ## Licence

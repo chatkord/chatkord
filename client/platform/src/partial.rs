@@ -147,8 +147,8 @@ mod tests {
     fn a_start_sweeps_the_kept_file_and_the_cache_of_a_dead_runs_partials() {
         let dir = scratch("owners");
         let platform = Platform::default().config_in(dir.join("config")).cache_in(dir.join("cache"));
-        let kept = dir.join("config").join("chatkord");
-        let files = dir.join("cache").join("chatkord").join("files");
+        let kept = dir.join("config").join(crate::state::FOLDER);
+        let files = dir.join("cache").join(crate::state::FOLDER).join("files");
         let (kept_dead, kept_alive) = (kept.join(format!("chatkord.json.{DEAD}.part")), kept.join("chatkord.json"));
         let (file_dead, file_alive) =
             (files.join(format!("ff10.{DEAD}.part")), files.join(format!("ff10.{ALIVE}.part")));

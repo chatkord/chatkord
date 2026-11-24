@@ -371,7 +371,6 @@ mod tests {
     #[test]
     fn a_file_of_another_shape_or_an_empty_id_is_the_default() {
         let folder = scratch("odd");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         raw_kept_in::<Choice>(&folder, "[1, 2]").unwrap();
         assert_eq!(held(&folder), Choice::default());
         let empty = Picked { id: String::new(), label: "Desk".into() };

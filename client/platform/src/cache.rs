@@ -4,11 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::state::FOLDER;
 use crate::{Platform, Unavailable, blocking};
 use portrait::{NotKept, Square};
 use proto::files::FileId;
 
-const FOLDER: &str = "chatkord";
 const FILES: &str = "files";
 
 /// The system's cache directory: `XDG_CACHE_HOME`, else `$HOME/.cache` on Linux; `LOCALAPPDATA` on Windows. Only a

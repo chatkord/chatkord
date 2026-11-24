@@ -24,7 +24,7 @@ pub const BODY_MAX: usize = 240;
 /// ([`crate::launcher::keep`]); the installer's Start Menu shortcut carries the same one (`AppUserModelID` in
 /// `scripts/package/windows.iss`), which gives a toast the program's name and icon.
 #[cfg(windows)]
-pub const APP_USER_MODEL_ID: &str = "Chatkord.Chatkord";
+pub const APP_USER_MODEL_ID: &str = channel::THIS.app_user_model_id;
 
 /// Why a popup was not made.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, report::Public)]

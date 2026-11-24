@@ -60,7 +60,7 @@ mod system {
     //! Windows' package: the setup, kept where downloads are staged; the install is left as it was.
 
     use crate::package::Platform;
-    use crate::place::{SETUP, Target};
+    use crate::place::{Target, setup_name};
     use std::path::{Path, PathBuf};
 
     pub(super) const PLATFORM: Platform = Platform::WindowsX86_64;
@@ -75,14 +75,14 @@ mod system {
 
     /// Where a package put in place is: the setup's one name where downloads are staged.
     pub(super) fn placed(target: &Target) -> PathBuf {
-        target.staging().join(SETUP)
+        target.staging().join(setup_name())
     }
 
     /// The installed window is the running one still and alone, and the setup alone where it is kept.
     pub(super) fn assert_replaced(target: &Target, directory: &Path) {
         assert_eq!(std::fs::read(target.file()).unwrap(), super::OLD);
         assert_eq!(super::names(directory), [INSTALLED]);
-        assert_eq!(super::names(target.staging()), [SETUP]);
+        assert_eq!(super::names(target.staging()), [setup_name()]);
     }
 }
 

@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Chatkord
+Name=@PRODUCT@
 Comment=Voice, screen sharing and chat for your community
-Exec=chatkord
-Icon=chatkord
+Exec=@ID@
+Icon=@ID@
 Terminal=false
 Categories=Network;InstantMessaging;Chat;
-StartupWMClass=chatkord
+StartupWMClass=@ID@
 StartupNotify=true

@@ -82,7 +82,7 @@ case "${1:-}" in
     # Passed by name, so no value is ever on a command line; no secret is passed: none reaches a build.
     passed=(GATE_BUILD_JOBS GATE_CHECK_JOBS NEXTEST_PROFILE CARGO_INCREMENTAL CARGO_PROFILE_DEV_DEBUG CARGO_LOG
       GATE_NO_CONTAINERS GATE_WORKSPACES GATE_KEEP_GOING CI PRIVACY_TERMS_UNAVAILABLE CHATKORD_UPDATES
-      CHATKORD_VERSION CHATKORD_SERVER_BASE)
+      CHATKORD_CHANNEL CHATKORD_VERSION CHATKORD_SERVER_BASE)
     for var in "${passed[@]}"; do
       [[ -n "${!var:-}" ]] && args+=(-e "$var")
     done

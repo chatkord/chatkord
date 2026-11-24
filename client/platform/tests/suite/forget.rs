@@ -24,13 +24,13 @@ fn remembered(name: &str) -> (Platform, PathBuf, PathBuf, Vec<ServerUrl>) {
         runtime.block_on(state::remember_account(&platform, server.clone(), identity.into())).unwrap();
         keyring::store(server, identity, None, &Secret::new(format!("token of {identity}"))).unwrap();
     }
-    std::fs::create_dir_all(cached.join("chatkord").join("files")).unwrap();
-    std::fs::write(cached.join("chatkord").join("files").join("kept"), b"a picture").unwrap();
+    std::fs::create_dir_all(cached.join(channel::THIS.id).join("files")).unwrap();
+    std::fs::write(cached.join(channel::THIS.id).join("files").join("kept"), b"a picture").unwrap();
     (platform, config, cached, servers)
 }
 
 fn held(config: &Path) -> instance::Instance {
-    instance::claim_in(&config.join("chatkord"), None).unwrap()
+    instance::claim_in(&config.join(channel::THIS.id), None).unwrap()
 }
 
 #[test]
@@ -42,8 +42,8 @@ fn every_token_the_cache_and_the_folder_go() {
     for (server, identity) in servers.iter().zip([ADA, BEA]) {
         assert!(keyring::load(server, identity).unwrap().is_none(), "{identity}'s token stayed");
     }
-    assert!(!config.join("chatkord").exists(), "the folder stayed");
-    assert!(!cached.join("chatkord").exists(), "the cache stayed");
+    assert!(!config.join(channel::THIS.id).exists(), "the folder stayed");
+    assert!(!cached.join(channel::THIS.id).exists(), "the cache stayed");
     let _ = std::fs::remove_dir_all(config.parent().unwrap());
 }
 
@@ -58,7 +58,7 @@ fn a_keyring_that_refuses_leaves_everything_in_place() {
     for (server, identity) in servers.iter().zip([ADA, BEA]) {
         assert!(keyring::load(server, identity).unwrap().is_some(), "{identity}'s token went");
     }
-    assert!(config.join("chatkord").join(platform::kept::FILE).exists(), "the folder went");
-    assert!(cached.join("chatkord").exists(), "the cache went");
+    assert!(config.join(channel::THIS.id).join(platform::kept::FILE).exists(), "the folder went");
+    assert!(cached.join(channel::THIS.id).exists(), "the cache went");
     let _ = std::fs::remove_dir_all(config.parent().unwrap());
 }

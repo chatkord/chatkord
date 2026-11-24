@@ -35,7 +35,7 @@ impl Home {
 
     /// Chooses, as Settings › Startup does, that closing the window quits rather than going to the tray.
     pub(crate) fn closing_quits(&self) {
-        let folder = self.0.join("chatkord");
+        let folder = self.0.join(channel::THIS.id);
         std::fs::create_dir_all(&folder).unwrap();
         std::fs::write(
             folder.join(platform::kept::FILE),

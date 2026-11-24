@@ -1,7 +1,6 @@
 ### Todo lo que la ventana le dice a una persona, en español neutro.
 
 language-name = Español
-window-title = Chatkord
 saved-sign-in-expired = La sesión guardada ha caducado; escribe tu contraseña.
 saved-sign-in-held = Ese servidor no respondió; tu sesión guardada se conserva, así que no se perdió nada.
 keyring-unavailable = El llavero del sistema no está disponible, así que la próxima vez se te pedirá la contraseña.

@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["webrtc", "rtc", "terms", "words", "choices", "link", "clock", "capture", "sound", "e2e", "media", "net", "pw", "share", "platform", "errands", "design", "chat", "screens", "picture", "portrait", "notices", "call", "cli", "testserver", "tier", "update", "fetch", "shell", "shell/ui"]
+members = ["webrtc", "rtc", "channel", "terms", "words", "choices", "link", "clock", "capture", "sound", "e2e", "media", "net", "pw", "share", "platform", "errands", "design", "chat", "screens", "picture", "portrait", "notices", "call", "cli", "testserver", "tier", "update", "fetch", "shell", "shell/ui"]
 # The window and its components link the whole engine and iced; `cargo build` and `cargo test` at the root leave them
 # to `-p shell` and `--workspace`.
-default-members = ["webrtc", "rtc", "terms", "words", "choices", "link", "clock", "capture", "sound", "e2e", "media", "net", "pw", "share", "platform", "errands", "design", "chat", "screens", "picture", "portrait", "notices", "call", "cli", "testserver", "tier", "update", "fetch"]
+default-members = ["webrtc", "rtc", "channel", "terms", "words", "choices", "link", "clock", "capture", "sound", "e2e", "media", "net", "pw", "share", "platform", "errands", "design", "chat", "screens", "picture", "portrait", "notices", "call", "cli", "testserver", "tier", "update", "fetch"]
 
 [workspace.package]
 license = "GPL-3.0-or-later"

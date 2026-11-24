@@ -6,8 +6,6 @@
 
 # This catalog's language in its own name, which Settings › Appearance lists it by.
 language-name = English
-# The title of the window, which a task switcher and a screen reader say.
-window-title = Chatkord
 saved-sign-in-expired = The saved sign-in has expired; enter your password.
 # The server did not answer while a saved sign-in was being offered, so nothing about that
 # sign-in is thrown away: the words say the server, not the person, and `TryAgain` is what

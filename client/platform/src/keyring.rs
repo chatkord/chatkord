@@ -15,7 +15,7 @@ use crate::Unavailable;
 use terms::{Secret, ServerUrl};
 
 /// The service every entry is filed under in the system's keyring.
-pub const SERVICE: &str = "chatkord";
+pub const SERVICE: &str = channel::THIS.id;
 
 /// Makes a credential store, or says why it could not.
 pub type Make = Box<dyn Fn() -> keyring_core::Result<Arc<CredentialStore>> + Send + Sync>;

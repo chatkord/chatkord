@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# The Linux AppImage: build/package/Chatkord-<version>-x86_64.AppImage. The one
+# The Linux AppImage: build/package/<CHANNEL_FILE>-<version>-x86_64.AppImage. The one
 # binary, the window and the command line, is built in release in the builder image, against the libraries it built,
 # with the run path that finds them beside it, and held to scripts/size-budget.txt; the AppDir is that folder with the
 # desktop's files and every carried licence, checked, then made one squashfs behind AppImage's runtime (pinned below
-# by its release's SHA-256). The layout is scripts/package/linux.env's, the name and summary the desktop entry's, the
-# version scripts/release/next.py's (a release's at its tag, else the next release's pre-release, as the image's).
+# by its release's SHA-256). The layout is scripts/package/linux.env's, the names the channel's
+# (scripts/package/channel.sh), the summary the desktop entry's, the version CHATKORD_VERSION when set, else
+# scripts/release/next.py's (a release's at its tag, else the next release's pre-release, as the image's).
 #
 # Usage: scripts/package/linux.sh                  (needs podman or docker)
 #        scripts/package/linux.sh appimage VERSION in the builder: built, staged, checked and made
-# CHATKORD_UPDATES, when set, is the update channel the binary is built with;
-# a build without it, as any local one, has none.
+# CHATKORD_CHANNEL names the channel built (stable by default). CHATKORD_UPDATES, when set, is the update channel the
+# binary is built with; a build without it, as any local one, has none.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# shellcheck source=channel.sh
+. scripts/package/channel.sh
 # shellcheck source=linux.env
 . scripts/package/linux.env
 # shellcheck source=budget.sh
@@ -20,8 +23,9 @@ RUNTIME_RELEASE=20251108
 RUNTIME_SHA256=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
 runtime="build/tools/appimage-runtime-$RUNTIME_RELEASE"
 entry=client/shell/assets/chatkord.desktop
-name="$(sed -n 's/^Name=//p' "$entry")"
 summary="$(sed -n 's/^Comment=//p' "$entry")"
+# The entry is a template: the channel's id and product fill its placeholders.
+filled() { sed -e "s|@ID@|$CHANNEL_ID|g" -e "s|@PRODUCT@|$CHANNEL_PRODUCT|g" "$entry"; }
 
 # appstreamcli refuses a component id that is not a reverse domain name and a missing homepage, both kept for now
 # (the id is the window's app id; the repository has no public page): each is let through by name, nothing else.
@@ -41,52 +45,55 @@ appimage() {
   (cd client && CHATKORD_PACKAGE=linux CHATKORD_VERSION="$version" \
     cargo build --locked --release -p shell "${rpath[@]}")
   rm -rf "$dir" && home="$dir$CHATKORD_HOME" && mkdir -p "$home/dri" "$dir/usr/bin"
-  install -m 755 "$CARGO_TARGET_DIR/release/shell" "$home/chatkord"
-  within_budget "$home/chatkord" linux
+  install -m 755 "$CARGO_TARGET_DIR/release/shell" "$home/$CHANNEL_ID"
+  within_budget "$home/$CHANNEL_ID" linux
   for lib in libdrm.so.2 libdrm_amdgpu.so.1; do
     install -m 755 "$(realpath build/deps/lib/$lib)" "$home/$lib"
   done
   # Mesa's VA driver, by the name libva asks for; its symbols are not needed to run it.
   install -m 755 "$(realpath build/deps/lib/dri/radeonsi_drv_video.so)" "$home/dri/radeonsi_drv_video.so"
   strip --strip-unneeded "$home/dri/radeonsi_drv_video.so"
-  ln -s "../..$CHATKORD_HOME/chatkord" "$dir/usr/bin/chatkord"
+  ln -s "../..$CHATKORD_HOME/$CHANNEL_ID" "$dir/usr/bin/$CHANNEL_ID"
 
   # The binary names its own driver folder to libva, wherever the image is mounted.
   cat > "$dir/AppRun" <<EOF
 #!/bin/sh
-exec "\$(dirname "\$(readlink -f "\$0")")$CHATKORD_HOME/chatkord" "\$@"
+exec "\$(dirname "\$(readlink -f "\$0")")$CHATKORD_HOME/$CHANNEL_ID" "\$@"
 EOF
   chmod 755 "$dir/AppRun"
-  install -D -m 644 "$entry" "$dir/usr/share/applications/chatkord.desktop"
-  cp "$entry" "$dir/chatkord.desktop"
+  mkdir -p "$dir/usr/share/applications"
+  filled > "$dir/usr/share/applications/$CHANNEL_ID.desktop"
+  chmod 644 "$dir/usr/share/applications/$CHANNEL_ID.desktop"
+  cp "$dir/usr/share/applications/$CHANNEL_ID.desktop" "$dir/$CHANNEL_ID.desktop"
   for png in client/shell/assets/icon/chatkord-*.png; do
     side="${png##*-}"; side="${side%.png}"
-    install -D -m 644 "$png" "$dir/usr/share/icons/hicolor/${side}x${side}/apps/chatkord.png"
+    install -D -m 644 "$png" "$dir/usr/share/icons/hicolor/${side}x${side}/apps/$CHANNEL_ID.png"
   done
-  cp client/shell/assets/icon/chatkord-256.png "$dir/chatkord.png"
-  ln -s chatkord.png "$dir/.DirIcon"
+  cp client/shell/assets/icon/chatkord-256.png "$dir/$CHANNEL_ID.png"
+  ln -s "$CHANNEL_ID.png" "$dir/.DirIcon"
   mkdir -p "$dir/usr/share/metainfo"
-  sed -e "s|@NAME@|$name|" -e "s|@SUMMARY@|$summary|" -e "s|@VERSION@|$version|" \
-    -e "s|@DATE@|$(git log -1 --format=%cs)|" client/shell/assets/chatkord.metainfo.xml.in \
-    > "$dir/usr/share/metainfo/chatkord.metainfo.xml"
+  sed -e "s|@ID@|$CHANNEL_ID|g" -e "s|@NAME@|$CHANNEL_PRODUCT|" -e "s|@SUMMARY@|$summary|" \
+    -e "s|@VERSION@|$version|" -e "s|@DATE@|$(git log -1 --format=%cs)|" client/shell/assets/chatkord.metainfo.xml.in \
+    > "$dir/usr/share/metainfo/$CHANNEL_ID.metainfo.xml"
 
   # Every carried project's licence and our own, and the notices the About page reads.
-  bash scripts/package/notices.sh "$dir/usr/share/licenses/chatkord" "$version" client/shell/Cargo.toml
+  bash scripts/package/notices.sh "$dir/usr/share/licenses/$CHANNEL_ID" "$version" client/shell/Cargo.toml
   # The recipe that made what the AppImage carries, for anyone who rebuilds it, as the GPL of FFmpeg and x264 asks.
-  local recipe="$dir/usr/share/doc/chatkord/recipe"
+  local recipe="$dir/usr/share/doc/$CHANNEL_ID/recipe"
   mkdir -p "$recipe"
-  cp scripts/package/linux.sh scripts/package/linux.env scripts/package/va-system-drivers.txt scripts/package/budget.sh \
-    scripts/deps/ffmpeg.sh scripts/deps/libs.sh scripts/deps/ffmpeg-pin.sh scripts/deps/codecs-pin.sh scripts/deps/mesa.sh \
-    scripts/deps/source.sh scripts/deps/webrtc.sh "$recipe/"
+  cp "$channel_env" scripts/package/channel.sh scripts/package/linux.sh scripts/package/linux.env \
+    scripts/package/va-system-drivers.txt scripts/package/budget.sh scripts/deps/ffmpeg.sh scripts/deps/libs.sh \
+    scripts/deps/ffmpeg-pin.sh scripts/deps/codecs-pin.sh scripts/deps/mesa.sh scripts/deps/source.sh \
+    scripts/deps/webrtc.sh "$recipe/"
   cp -r patches/webrtc "$recipe/webrtc-patches"
   cp -r patches/ffmpeg "$recipe/ffmpeg-patches"
 
-  desktop-file-validate "$dir/chatkord.desktop"
-  metainfo_checked "$dir/usr/share/metainfo/chatkord.metainfo.xml" ||
+  desktop-file-validate "$dir/$CHANNEL_ID.desktop"
+  metainfo_checked "$dir/usr/share/metainfo/$CHANNEL_ID.metainfo.xml" ||
     { echo "FAIL: the metainfo has a warning not let through"; exit 1; }
   bash scripts/package/glibc-floor.sh "$dir"
   # Every time and owner in the image is the commit's and root's, so the same commit makes the same AppImage.
-  local made="build/package/$name-$version-x86_64.AppImage" epoch
+  local made="build/package/$CHANNEL_FILE-$version-x86_64.AppImage" epoch
   epoch=$(git log -1 --format=%ct)
   mksquashfs "$dir" build/package/AppDir.squashfs -noappend -all-root -comp zstd -Xcompression-level 19 \
     -mkfs-time "$epoch" -all-time "$epoch" -quiet
@@ -102,7 +109,7 @@ case "${1:-}" in
     # shellcheck source=../../protocol/scripts/find-python.sh
     . protocol/scripts/find-python.sh
     [[ -n "${PYTHON:-}" ]] || { echo "FAIL: no Python $PYTHON_FLOOR+"; exit 1; }
-    version="$($PYTHON -I scripts/release/next.py --build)"
+    version="${CHATKORD_VERSION:-$($PYTHON -I scripts/release/next.py --build)}"
     if [[ ! -f "$runtime" ]]; then
       mkdir -p build/tools
       curl -sSfL -o "$runtime" \
@@ -114,7 +121,7 @@ case "${1:-}" in
     mkdir -p build/builder/tools build/package
     cp "$runtime" "build/builder/${runtime#build/}"
     scripts/ci/builder.sh run scripts/package/linux.sh appimage "$version"
-    mv "build/builder/package/$name-$version-x86_64.AppImage" build/package/
-    echo "built build/package/$name-$version-x86_64.AppImage" ;;
+    mv "build/builder/package/$CHANNEL_FILE-$version-x86_64.AppImage" build/package/
+    echo "built build/package/$CHANNEL_FILE-$version-x86_64.AppImage" ;;
   *) echo "usage: linux.sh [appimage VERSION]"; exit 2 ;;
 esac

@@ -214,12 +214,13 @@ mod tests {
     fn a_system_or_field_this_build_does_not_know_is_passed_over() {
         let key = signing_key();
         let digest = "ab".repeat(32);
+        let version = Version::new(2, 0, 0);
         let text = format!(
-            r#"{{"version":"2.0.0","notes":["later"],"packages":{{"linux-aarch64":{{"anything":1}},
+            r#"{{"version":"{version}","notes":["later"],"packages":{{"linux-aarch64":{{"anything":1}},
             "linux-x86_64":{{"file":"a.AppImage","size":5,"sha256":"{digest}","delta":true}}}}}}"#
         );
         let manifest = read(&text, &key).unwrap();
-        assert_eq!(manifest.version(), Version::new(2, 0, 0));
+        assert_eq!(manifest.version(), version);
         assert_eq!(manifest.package(Platform::LinuxX86_64).map(Package::size), Some(5));
         assert_eq!(manifest.package(Platform::WindowsX86_64), None);
     }

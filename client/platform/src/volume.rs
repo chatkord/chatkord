@@ -140,7 +140,6 @@ mod tests {
     #[test]
     fn a_percent_over_full_or_of_another_shape_is_full_and_leaves_the_rest() {
         let folder = scratch("odd");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         let odd =
             r#"{"wss://chat.example.invalid/v1":{"bo":{"voice":101,"share":30},"cy":{"voice":"loud","share":-1}}}"#;
         raw_kept_in::<Held>(&folder, odd).unwrap();

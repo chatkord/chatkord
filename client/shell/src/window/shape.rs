@@ -9,7 +9,7 @@ use ui::host;
 
 /// The application id a desktop groups the window under (Wayland's app id, X11's class), as the desktop entry will name it.
 #[cfg(target_os = "linux")]
-const APP_ID: &str = "chatkord";
+const APP_ID: &str = channel::THIS.id;
 
 /// A window's place and size, or a monitor's, in physical pixels.
 pub(super) type Placed = (winit::dpi::PhysicalPosition<i32>, winit::dpi::PhysicalSize<u32>);
@@ -196,8 +196,8 @@ mod tests {
         shape.moved(winit::dpi::PhysicalPosition::new(90, 60), true);
         let (size, at) = (winit::dpi::LogicalSize::new(1200.0, 800.0), winit::dpi::PhysicalPosition::new(90, 60));
         assert_eq!(shape, Shape { size, position: Some(at), maximized: false });
-        let again = window_attributes(Some(Shape { maximized: true, ..shape }), "Chatkord".into());
-        assert_eq!(again.title, "Chatkord");
+        let again = window_attributes(Some(Shape { maximized: true, ..shape }), channel::THIS.product.into());
+        assert_eq!(again.title, channel::THIS.product);
         assert_eq!(again.inner_size, Some(winit::dpi::Size::Logical(size)));
         assert_eq!(again.position, Some(winit::dpi::Position::Physical(at)));
         assert!(again.maximized);

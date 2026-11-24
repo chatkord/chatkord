@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# The Windows setup: the release window, held to scripts/size-budget.txt, and FFmpeg's DLLs in one per-user installer
-#, build/package/chatkord-setup-<version>.exe. Inno Setup is installed into
-# build/tools first, checked against the SHA-256 its release publishes. The product's name is the window's title in
-# the English catalog, its version scripts/release/next.py's (a release's at its tag, else the next release's
-# pre-release), so neither is restated here or in the recipe.
+# The Windows setup: the release window, held to scripts/size-budget.txt, and FFmpeg's DLLs in one per-user installer,
+# build/package/<CHANNEL_FILE>-setup-<version>.exe. Inno Setup is installed into build/tools first, checked against
+# the SHA-256 its release publishes. The names are the channel's
+# (scripts/package/channel.sh, which windows.iss reads from the environment), the version CHATKORD_VERSION when set,
+# else scripts/release/next.py's (a release's at its tag, else the next release's pre-release), so none is restated.
 #
 # Usage: scripts/package/windows.sh   (needs build/deps from scripts/deps/ffmpeg-windows.sh at this tree's recipe)
-# CHATKORD_UPDATES, when set, is the update channel the window is built with;
-# a build without it, as any local one, has none.
+# CHATKORD_CHANNEL names the channel built (stable by default). CHATKORD_UPDATES, when set, is the update channel the
+# window is built with; a build without it, as any local one, has none.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+# shellcheck source=channel.sh
+. scripts/package/channel.sh
 # shellcheck source=budget.sh
 . scripts/package/budget.sh
 
@@ -34,15 +36,16 @@ fi
 # shellcheck source=../../protocol/scripts/find-python.sh
 . protocol/scripts/find-python.sh
 [[ -n "${PYTHON:-}" ]] || { echo "FAIL: no Python $PYTHON_FLOOR+"; exit 1; }
-version="$($PYTHON -I scripts/release/next.py --build)"
+version="${CHATKORD_VERSION:-$($PYTHON -I scripts/release/next.py --build)}"
 scripts/deps/webrtc.sh > /dev/null
 # The window and its resources say the version the setup is named by (terms::BUILD).
 (cd client && CHATKORD_VERSION="$version" cargo build --locked --release -p shell)
 within_budget client/target/release/shell.exe windows
-name="$(sed -n 's/^window-title = //p' client/words/catalogs/en.ftl | tr -d '\r')"
 # Every carried project's licence and our own, and the notices the About page reads, as the setup installs them.
 rm -rf build/package/licenses
 bash scripts/package/notices.sh build/package/licenses "$version" client/shell/Cargo.toml
 
-MSYS2_ARG_CONV_EXCL='*' "$inno/ISCC.exe" -q "/DName=$name" "/DVersion=$version" scripts/package/windows.iss
-echo "built build/package/chatkord-setup-$version.exe"
+# The recipe reads the channel's names from these, so a value with a space needs no quoting on ISCC's command line.
+export CHANNEL_ID CHANNEL_PRODUCT CHANNEL_FILE CHANNEL_APP_USER_MODEL_ID CHANNEL_SETUP_ID
+MSYS2_ARG_CONV_EXCL='*' "$inno/ISCC.exe" -q "/DVersion=$version" scripts/package/windows.iss
+echo "built build/package/$CHANNEL_FILE-setup-$version.exe"

@@ -1,0 +1,127 @@
+name: Build dev
+
+# A dev build of develop's tip, by hand: the Dev app's packages (channel dev), signed with the dev key, kept as the
+# pre-release `v<version>` and offered to the Dev app on the fixed `dev` release, as scripts/release/dev.sh makes an
+# unsigned one on this machine. Only develop is built, as it stands: a dev build is fast and asks for no gate, which is
+# main's.
+on:
+  workflow_dispatch:
+
+# One dev build at a time: two would count the same next version.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - name: Only develop is built
+        if: github.ref != 'refs/heads/develop'
+        run: |
+          echo "::error::a dev build is made of develop, not $GITHUB_REF"
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          fetch-depth: 0
+          persist-credentials: false
+      - id: next
+        run: |
+          built="$(python3 -I scripts/release/next.py --build)"
+          if [[ -n "$(git tag --points-at HEAD --list "v$built")" ]]; then
+            echo "::error::$GITHUB_SHA is v$built already, and a commit has one dev release"
+            exit 1
+          fi
+          echo "version=$(python3 -I scripts/release/next.py --dev)" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: version
+    uses: ./.github/workflows/package.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      channel: dev
+      version: ${{ needs.version.outputs.version }}
+
+  sign:
+    needs: [version, package]
+    uses: ./.github/workflows/sign.yml
+    permissions:
+      contents: read
+    with:
+      environment: dev-release
+      tag: v${{ needs.version.outputs.version }}
+
+  publish:
+    needs: [version, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: v${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed
+          path: dist
+      # The permanent record of this build: the pre-release the version names, never moved.
+      - name: Make the pre-release
+        run: |
+          shopt -s nullglob
+          packages=(dist/*.AppImage dist/*.exe)
+          notes="A dev build of $GITHUB_SHA, no release: the release it precedes outranks it."
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "$TAG (dev)" --notes "$notes" \
+            "${packages[@]}" dist/SHA256SUMS dist/latest.json.sig dist/latest.json
+      # The Dev app reads its feed from the fixed release `dev`, which is never deleted and made again: its tag moves to
+      # this commit and its assets are replaced in the order a reader can survive.
+      - name: Point the dev feed at this build
+        run: |
+          shopt -s nullglob
+          if ! gh release view dev --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            notes="The newest dev build, which the Dev app updates from. Every build is its own pre-release."
+            gh release create dev --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title "Dev channel" --notes "$notes"
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/dev" > /dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/dev" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/dev -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          mapfile -t before < <(gh release view dev --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          packages=(dist/*.AppImage dist/*.exe)
+          # The new packages first, under their own names: a download in flight keeps its file, and the old manifest
+          # still names the old packages. Then the sums, the signature and the manifest last, so a check mid-upload
+          # reads either the old set whole or fails safely (a manifest never has a signature it was not signed with).
+          gh release upload dev --repo "$GITHUB_REPOSITORY" "${packages[@]}"
+          gh release upload dev --repo "$GITHUB_REPOSITORY" --clobber dist/SHA256SUMS
+          gh release upload dev --repo "$GITHUB_REPOSITORY" --clobber dist/latest.json.sig
+          gh release upload dev --repo "$GITHUB_REPOSITORY" --clobber dist/latest.json
+          # The previous packages go only once the new manifest is up.
+          for old in "${before[@]}"; do
+            case "$old" in
+              *.AppImage | *.exe)
+                kept=0
+                for package in "${packages[@]}"; do
+                  if [[ "${package##*/}" == "$old" ]]; then kept=1; fi
+                done
+                if (( ! kept )); then gh release delete-asset dev "$old" --repo "$GITHUB_REPOSITORY" --yes; fi ;;
+              *) ;;
+            esac
+          done

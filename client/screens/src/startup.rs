@@ -45,7 +45,7 @@ pub(crate) fn tray_menu(state: State, restart: RestartOffer, words: &Words) -> T
     let item = |pick, phrase, ticked| TrayItem { pick, label: words.phrase(phrase).into_owned(), ticked };
     let restart = (restart == RestartOffer::Offered).then(|| item(TrayPick::Restart, Phrase::TrayRestart, None));
     TrayMenu {
-        title: words.phrase(Phrase::WindowTitle).into_owned(),
+        title: channel::THIS.product.to_owned(),
         items: [
             item(TrayPick::Open, Phrase::TrayOpen, None),
             item(TrayPick::Mute, Phrase::MuteMic, Some(state.mic_muted)),
@@ -68,7 +68,7 @@ mod tests {
             tray_menu(State { mic_muted: true, deafened: false }, RestartOffer::NotApplicable, &Words::english());
         let said: Vec<(&str, Option<bool>)> =
             menu.items.iter().map(|item| (item.label.as_str(), item.ticked)).collect();
-        assert_eq!(menu.title, "Chatkord");
+        assert_eq!(menu.title, channel::THIS.product);
         assert_eq!(
             said,
             [("Open Chatkord", None), ("Mute", Some(true)), ("Deafen", Some(false)), ("Quit Chatkord", None)]

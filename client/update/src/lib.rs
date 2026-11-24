@@ -2,9 +2,9 @@
 //! release publishes `latest.json`, the release key's Ed25519 signature over it as `latest.json.sig`, and each
 //! system's package beside them.
 //!
-//! A build has a [`Channel`] only when it carries the release's public key (`release.pub`) and was stamped with a
-//! feed (`CHATKORD_UPDATES`), and a run has a [`Target`] only when it is from a package this system's half can
-//! replace (on Linux an AppImage, on Windows the setup's install). With both, [`check`] reads the manifest only once
+//! A build has a [`Channel`] only when it carries its channel's public key (`release.pub` or `dev.pub`) and was
+//! stamped with a feed (`CHATKORD_UPDATES`), and a run has a [`Target`] only when it is from a package this system's
+//! half can replace (on Linux an AppImage, on Windows the setup's install). With both, [`check`] reads the manifest only once
 //! its signature holds, and offers a release newer than the running one; [`fetch`] streams its package where this
 //! system stages it (beside the AppImage; the user's temporary directory on Windows), checking its size and SHA-256 as
 //! it arrives; [`place`] renames it over the AppImage on Linux, and on Windows keeps the setup, which

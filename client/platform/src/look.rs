@@ -293,7 +293,6 @@ mod tests {
     #[test]
     fn a_message_size_or_gap_off_its_ladder_is_its_default_and_leaves_the_other() {
         let folder = scratch("messages");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         raw_kept_in::<Held>(&folder, r#"{"text_size":"24","run_gap":"0"}"#).unwrap();
         let read = read_kept_in::<Held>(&folder).look().messages;
         assert_eq!((read.size.px(), read.gap.px()), (24, 0));
@@ -307,7 +306,6 @@ mod tests {
     #[test]
     fn a_members_width_out_of_its_range_is_held_to_it_and_an_unknown_word_leaves_the_column_open() {
         let folder = scratch("members");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         for (word, kept) in [("300", 300), ("9000", 360), ("12", 200), ("wide", 240)] {
             raw_kept_in::<Held>(&folder, format!(r#"{{"members":"closed","members_width":"{word}"}}"#)).unwrap();
             let read = read_kept_in::<Held>(&folder).look().members;
@@ -320,7 +318,6 @@ mod tests {
     #[test]
     fn a_word_this_build_does_not_know_is_that_fields_default_and_leaves_the_others() {
         let folder = scratch("odd");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         raw_kept_in::<Held>(&folder, r#"{"theme":"dark","grain":"plaid","contrast":7}"#).unwrap();
         let read = read_kept_in::<Held>(&folder).look();
         assert_eq!(read, Look { theme: Preference::Dark, ..Look::default() });
@@ -335,7 +332,6 @@ mod tests {
     #[test]
     fn a_pane_width_out_of_its_range_is_held_to_it_and_one_not_a_number_is_its_least() {
         let folder = scratch("pane");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         for (word, kept) in [("300", 300), ("9000", 400), ("12", 248), ("-5", 248), ("wide", 248), ("NaN", 248)] {
             let file = format!(r#"{{"theme":"dark","pane":"{word}"}}"#);
             raw_kept_in::<Held>(&folder, file).unwrap();

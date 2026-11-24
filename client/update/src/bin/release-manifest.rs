@@ -1,11 +1,11 @@
 //! `release-manifest`: a release's `latest.json`, unsigned, for CI; never in a package.
 //!
-//! `release-manifest --version <MAJOR.MINOR.PATCH> --out <directory> <package>...` classifies each package by its
+//! `release-manifest --version <version> --out <directory> <package>...` classifies each package by its
 //! name (`*.AppImage` Linux, `*.exe` Windows) and writes `latest.json` into the directory, reading no key: CI's
 //! signing job, which builds nothing, signs its bytes. `release-manifest --public-key <file>` writes the public half
 //! of the key in `CHATKORD_RELEASE_KEY` (the base64 of its PKCS#8 DER, as
 //! `openssl genpkey -algorithm ed25519 | openssl pkey -outform DER | base64 -w0` writes it), 32 raw bytes, as
-//! `client/update/release.pub` holds it.
+//! the channel's public key file in `client/update` holds it.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -30,7 +30,7 @@ enum Asked {
 enum Failed {
     /// The arguments are not one of the two forms.
     Usage,
-    /// The version is not MAJOR.MINOR.PATCH.
+    /// The version is not of this channel's form.
     Version(VersionRefused),
     /// The key's variable is unset or not text.
     NoKey,
@@ -46,7 +46,7 @@ impl fmt::Display for Failed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Failed::Usage => f.write_str(
-                "usage: release-manifest --version <MAJOR.MINOR.PATCH> --out <directory> <package>...\n       \
+                "usage: release-manifest --version <version> --out <directory> <package>...\n       \
                  release-manifest --public-key <file>",
             ),
             Failed::Version(refused) => write!(f, "--version: {refused}"),

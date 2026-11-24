@@ -88,7 +88,7 @@ mod linux {
 
     impl Tray for Icon {
         fn id(&self) -> String {
-            "chatkord".into()
+            channel::THIS.id.into()
         }
 
         fn title(&self) -> String {
@@ -96,7 +96,7 @@ mod linux {
         }
 
         fn icon_name(&self) -> String {
-            "chatkord".into()
+            channel::THIS.id.into()
         }
 
         fn icon_pixmap(&self) -> Vec<ksni::Icon> {

@@ -7,13 +7,13 @@ use link::Trust;
 use std::ffi::OsStr;
 use std::fmt;
 
-/// The release's public key, from `release.pub` when the build had one (`build.rs`).
+/// This channel's public key, from the file `channel::THIS.update_key` names when the build had it (`build.rs`).
 const RELEASE_KEY: Option<[u8; VerifyingKey::LEN]> = include!(concat!(env!("OUT_DIR"), "/release_key.rs"));
 
 /// The feed this build was stamped with at build time: the directory of a repository's latest release.
 const STAMPED: Option<&str> = option_env!("CHATKORD_UPDATES");
 
-/// The variable naming, at run time, another feed for a stamped build: for a check by hand. The release key still
+/// The variable naming, at run time, another feed for a stamped build: for a check by hand. This channel's key still
 /// decides what is taken from it.
 pub const FEED_VARIABLE: &str = "CHATKORD_UPDATES_FEED";
 
@@ -29,7 +29,7 @@ pub struct Channel {
 /// Why this build has no update channel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoChannel {
-    /// It was built without the release's public key, so no update could be verified.
+    /// It was built without this channel's public key, so no update could be verified.
     NoReleaseKey,
     /// It was built without a feed (`CHATKORD_UPDATES`): a local build.
     NotStamped,
@@ -40,7 +40,7 @@ pub enum NoChannel {
 impl fmt::Display for NoChannel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            NoChannel::NoReleaseKey => "no updates: this build carries no release key",
+            NoChannel::NoReleaseKey => "no updates: this build carries no update key",
             NoChannel::NotStamped => "no updates: this build names no feed",
             NoChannel::BadFeed => "no updates: the feed is not an https directory",
         })
@@ -51,7 +51,7 @@ impl std::error::Error for NoChannel {}
 
 impl Channel {
     /// This build's channel: its feed, or the one [`FEED_VARIABLE`] names, checked under the system's verifier
-    /// alone (a key `trust` keeps for a server is not taken for a feed's host), and its release key.
+    /// alone (a key `trust` keeps for a server is not taken for a feed's host), and this channel's key.
     pub fn of_this_build(trust: &Trust) -> Result<Channel, NoChannel> {
         let feed = std::env::var_os(FEED_VARIABLE);
         Channel::of(RELEASE_KEY.map(VerifyingKey::new), STAMPED, feed.as_deref(), trust.for_server(None))

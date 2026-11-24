@@ -369,7 +369,7 @@ impl Scene for Watched {
     type Theme = ui::Theme;
 
     fn title(&self) -> String {
-        self.words.phrase(words::Phrase::WindowTitle).into_owned()
+        channel::THIS.product.to_owned()
     }
 
     fn prepare(&mut self, scheme: Scheme, motion: design::MotionPreference) {

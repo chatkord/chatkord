@@ -1,0 +1,9 @@
+[package]
+name = "channel"
+edition = "2024"
+publish = false
+license.workspace = true
+description = "Which channel this build is, stable or dev, and every name it goes by: one owner for the build and the packages"
+
+[lints]
+workspace = true

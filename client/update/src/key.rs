@@ -11,7 +11,7 @@ pub const SIGNATURE_BYTES: usize = 64;
 /// The longest the base64 of a signing key may be: a PKCS#8 v2 document with its public key is 83 bytes.
 const MAX_SIGNING_KEY_TEXT: usize = 256;
 
-/// The release's public key: 32 raw bytes, as `release.pub` holds it.
+/// A channel's public key: 32 raw bytes, as its key file (`release.pub`, `dev.pub`) holds it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VerifyingKey([u8; VerifyingKey::LEN]);
 
@@ -24,7 +24,7 @@ impl VerifyingKey {
         VerifyingKey(bytes)
     }
 
-    /// The raw key, as `release.pub` holds it.
+    /// The raw key, as a channel's key file holds it.
     pub fn bytes(&self) -> &[u8; VerifyingKey::LEN] {
         &self.0
     }

@@ -1,5 +1,5 @@
 //! The launcher's entry for a window run from an AppImage, which installs nothing: each start keeps
-//! `<data>/applications/chatkord.desktop` and its icons naming the image's own file, so the launcher offers it wherever
+//! `<data>/applications/<id>.desktop` and its icons naming the image's own file, so the launcher offers it wherever
 //! the file was moved, and a Wayland desktop, which takes a window's icon only from the entry its app id names, shows
 //! it. An entry something else made (a package, the tree's `scripts/desktop-entry.sh`) is left as it is; `forget` takes
 //! this one away. Its `TryExec` names the file too, so a launcher hides the entry once the file is gone, and the
@@ -21,7 +21,7 @@ mod unity;
 
 /// The desktop's entry for this program, which a launcher and the notification server know it by.
 #[cfg(target_os = "linux")]
-pub(crate) const DESKTOP_ENTRY: &str = "chatkord";
+pub(crate) const DESKTOP_ENTRY: &str = channel::THIS.id;
 
 /// The app icon at each size the desktop asks for, the window's own (`client/shell/assets/icon`).
 #[cfg(target_os = "linux")]
@@ -146,7 +146,7 @@ fn entry_path(data: &Path) -> PathBuf {
 
 #[cfg(target_os = "linux")]
 fn icon_path(data: &Path, side: u32) -> PathBuf {
-    data.join("icons").join("hicolor").join(format!("{side}x{side}")).join("apps").join("chatkord.png")
+    data.join("icons").join("hicolor").join(format!("{side}x{side}")).join("apps").join(format!("{DESKTOP_ENTRY}.png"))
 }
 
 /// The entry this module made: none there, or one it marked.
@@ -212,9 +212,18 @@ mod tests {
         keep_in(&data, Path::new("/home/x/Applications/Chatkord.AppImage")).unwrap();
         let entry = std::fs::read_to_string(entry_path(&data)).unwrap();
         assert!(entry.contains("Exec=\"/home/x/Applications/Chatkord.AppImage\"\n"), "{entry}");
-        assert!(entry.contains("Icon=chatkord\n") && entry.contains("StartupWMClass=chatkord\n"), "{entry}");
+        let id = channel::THIS.id;
+        assert!(
+            entry.contains(&format!("Icon={id}\n")) && entry.contains(&format!("StartupWMClass={id}\n")),
+            "{entry}"
+        );
         assert!(entry.contains("TryExec=/home/x/Applications/Chatkord.AppImage\n"), "{entry}");
         assert!(ICONS.iter().all(|(side, _)| icon_path(&data, *side).exists()));
+        assert_eq!(
+            entry_path(&data).file_name().and_then(|name| name.to_str()),
+            Some(format!("{id}.desktop").as_str())
+        );
+        assert!(icon_path(&data, 48).ends_with(format!("48x48/apps/{id}.png")));
         keep_in(&data, Path::new("/home/x/Downloads/Chatkord.AppImage")).unwrap();
         let moved = std::fs::read_to_string(entry_path(&data)).unwrap();
         assert!(moved.contains("Exec=\"/home/x/Downloads/Chatkord.AppImage\"\n"), "the file moved: {moved}");
@@ -259,7 +268,7 @@ mod tests {
     #[test]
     fn the_icon_s_count_is_the_badge_s_and_a_dot_shows_none() {
         let badge = |shown| screens::Badge { shown, stale: false };
-        assert_eq!(unity::app_uri(), "application://chatkord.desktop");
+        assert_eq!(unity::app_uri(), format!("application://{}.desktop", channel::THIS.id));
         let counted = unity::properties(badge(screens::BadgeShown::Count(3)).count());
         assert_eq!((&counted["count"], &counted["count-visible"]), (&Value::from(3i64), &Value::from(true)));
         let dot = unity::properties(badge(screens::BadgeShown::Dot).count());

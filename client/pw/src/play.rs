@@ -59,7 +59,7 @@ impl Play {
             // The call's role, not a notification's: KDE mutes notifications while any app is full screen.
             (c"media.role", "Communication".to_owned()),
             (c"node.name", "chatkord-sound".to_owned()),
-            (c"node.description", "Chatkord".to_owned()),
+            (c"node.description", channel::THIS.product.to_owned()),
         ];
         pairs.extend(speaker.map(|speaker| (c"target.object", speaker.to_owned())));
         let drained = Arc::new(AtomicBool::new(false));

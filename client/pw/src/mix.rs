@@ -126,7 +126,7 @@ impl Mix {
             (c"media.type", "Audio".to_owned()),
             (c"media.category", "Capture".to_owned()),
             (c"node.name", name.clone()),
-            (c"node.description", "Chatkord share".to_owned()),
+            (c"node.description", format!("{} share", channel::THIS.product)),
             (c"node.autoconnect", "false".to_owned()),
             (c"node.dont-reconnect", "true".to_owned()),
         ];

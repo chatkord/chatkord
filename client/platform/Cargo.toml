@@ -7,6 +7,8 @@ description = "The desktop operating system's services the client uses, one API 
 
 [dependencies]
 report.workspace = true
+# Which channel this build is: every folder, entry and id it goes by.
+channel = { path = "../channel" }
 terms = { path = "../terms" }
 design = { path = "../design" }
 screens = { path = "../screens" }

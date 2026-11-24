@@ -10,6 +10,8 @@ name = "release-manifest"
 path = "src/bin/release-manifest.rs"
 
 [dependencies]
+# Which channel this build is: its version's form, its staged file and its user agent.
+channel = { path = "../channel" }
 report.workspace = true
 proto.workspace = true
 terms = { path = "../terms" }
@@ -41,6 +43,10 @@ rcgen = { workspace = true, features = ["crypto", "ring"] }
 rustls = { workspace = true, features = ["ring", "std"] }
 tokio-rustls = { workspace = true, features = ["ring"] }
 tokio = { workspace = true, features = ["rt", "macros", "time", "net", "fs", "io-util", "test-util"] }
+
+[build-dependencies]
+# The file this channel's public key is in.
+channel = { path = "../channel" }
 
 [lints]
 workspace = true

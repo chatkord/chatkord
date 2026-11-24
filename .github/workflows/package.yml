@@ -1,0 +1,167 @@
+name: package
+
+# The client's packages of one channel, built from the commit the caller runs on: the AppImage and the Windows setup
+# at the one version the caller computed (so both carry it), and the unsigned update manifest naming them. The caller
+# signs (sign.yml) and publishes. Every name is the channel's file's (client/channel/channels/<channel>.env); no
+# secret is here.
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: "The channel built: stable or dev"
+        required: true
+        type: string
+      version:
+        description: "The version both packages carry"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  # The update channel a package is built with, read from the channel's file so no second copy of its path is here.
+  channel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      updates: ${{ steps.feed.outputs.updates }}
+    env:
+      CHATKORD_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            client/channel/channels
+            scripts/package/channel.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      # channel.sh refuses a channel with no file, as every package script does.
+      - id: feed
+        run: |
+          . scripts/package/channel.sh
+          echo "updates=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/$CHANNEL_FEED" >> "$GITHUB_OUTPUT"
+
+  builder:
+    needs: channel
+    uses: ./.github/workflows/builder.yml
+    permissions:
+      contents: read
+      packages: write
+
+  package-linux:
+    needs: [builder, channel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    env:
+      CHATKORD_CONTAINER: docker
+      BUILDER: ${{ needs.builder.outputs.image }}
+      CHATKORD_CHANNEL: ${{ inputs.channel }}
+      CHATKORD_VERSION: ${{ inputs.version }}
+      CHATKORD_UPDATES: ${{ needs.channel.outputs.updates }}
+    steps:
+      # Every tag: a package names its source only at the release's tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Free the runner's disk
+        run: scripts/ci/free-disk.sh
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the AppImage in the builder
+        run: CHATKORD_BUILDER="${BUILDER%:*}" scripts/package/linux.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-linux
+          path: build/package/*.AppImage
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  package-windows:
+    needs: channel
+    runs-on: windows-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      CHATKORD_CHANNEL: ${{ inputs.channel }}
+      CHATKORD_VERSION: ${{ inputs.version }}
+      CHATKORD_UPDATES: ${{ needs.channel.outputs.updates }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/windows-build
+      - name: Build the setup
+        run: scripts/package/windows.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-windows
+          path: build/package/*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  # The update manifest of both packages, written by the client's own writer in the builder; no key is in this job.
+  manifest:
+    needs: [builder, package-linux, package-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VERSION: ${{ inputs.version }}
+      CHATKORD_CONTAINER: docker
+      BUILDER: ${{ needs.builder.outputs.image }}
+      CHATKORD_CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: dist
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write the update manifest
+        run: |
+          shopt -s nullglob
+          appimage=(dist/*-"$VERSION"-x86_64.AppImage) setup=(dist/*-"$VERSION".exe)
+          if (( ${#appimage[@]} != 1 || ${#setup[@]} != 1 )); then
+            echo "::error::the packages are not one AppImage and one setup of $VERSION: $(cd dist && echo *)"; exit 1
+          fi
+          mkdir manifest
+          # shellcheck disable=SC2016 # expanded by the builder's bash
+          CHATKORD_BUILDER="${BUILDER%:*}" scripts/ci/builder.sh run bash -c \
+            'cargo build --locked --manifest-path client/Cargo.toml -p update --bin release-manifest &&
+             "$CARGO_TARGET_DIR/debug/release-manifest" --version "$1" --out manifest "$2" "$3"' \
+            _ "$VERSION" "${appimage[0]}" "${setup[0]}"
+          cat manifest/latest.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: manifest
+          path: manifest/latest.json
+          if-no-files-found: error
+          retention-days: 7

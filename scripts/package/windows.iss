@@ -1,17 +1,23 @@
-; The Windows setup's recipe, compiled by scripts/package/windows.sh, which passes Name and Version. Per user, no
+; The Windows setup's recipe, compiled by scripts/package/windows.sh, which passes Version and
+; exports the channel's names (client/channel/channels/<channel>.env). Per user, no
 ; administrator; Restart Manager closes a running window on install, upgrade and uninstall.
 
-#ifndef Name
-  #error Name is passed by scripts/package/windows.sh
+#define Name GetEnv("CHANNEL_PRODUCT")
+#define Pkg GetEnv("CHANNEL_FILE")
+#define AppUserModelId GetEnv("CHANNEL_APP_USER_MODEL_ID")
+; Inno reads a doubled brace as one, so the GUID's own brace is written twice.
+#define SetupId "{" + GetEnv("CHANNEL_SETUP_ID")
+#if Name == "" || Pkg == "" || AppUserModelId == "" || SetupId == "{"
+  #error The channel's names are exported by scripts/package/windows.sh
 #endif
 #ifndef Version
   #error Version is passed by scripts/package/windows.sh
 #endif
-#define Exe Name + ".exe"
+#define Exe Pkg + ".exe"
 
 [Setup]
 ; One install's identity across every version: an upgrade replaces it, never sits beside it. Never changed.
-AppId={{4E797837-AE77-42CF-B582-2151AFD51284}
+AppId={#SetupId}
 AppName={#Name}
 AppVersion={#Version}
 AppVerName={#Name} {#Version}
@@ -29,7 +35,7 @@ UninstallDisplayIcon={app}\{#Exe}
 UninstallDisplayName={#Name}
 WizardStyle=modern
 OutputDir=..\..\build\package
-OutputBaseFilename=chatkord-setup-{#Version}
+OutputBaseFilename={#Pkg}-setup-{#Version}
 
 [Files]
 Source: "..\..\client\target\release\shell.exe"; DestDir: "{app}"; DestName: "{#Exe}"; Flags: ignoreversion
@@ -38,6 +44,8 @@ Source: "..\..\build\deps\bin\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 ; put together and checked whole.
 Source: "..\..\build\package\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs
 ; The recipe that made what the setup carries, for anyone who rebuilds it, as the GPL of FFmpeg and x264 asks.
+Source: "..\..\client\channel\channels\*.env"; DestDir: "{app}\recipe\channels"; Flags: ignoreversion
+Source: "..\..\scripts\package\channel.sh"; DestDir: "{app}\recipe"; Flags: ignoreversion
 Source: "..\..\scripts\package\windows.sh"; DestDir: "{app}\recipe"; Flags: ignoreversion
 Source: "..\..\scripts\package\windows.iss"; DestDir: "{app}\recipe"; Flags: ignoreversion
 Source: "..\..\scripts\package\budget.sh"; DestDir: "{app}\recipe"; Flags: ignoreversion
@@ -50,8 +58,9 @@ Source: "..\..\patches\webrtc\*"; DestDir: "{app}\recipe\webrtc-patches"; Flags:
 Source: "..\..\patches\ffmpeg\*"; DestDir: "{app}\recipe\ffmpeg-patches"; Flags: ignoreversion recursesubdirs
 
 [Icons]
-; The AppUserModelID is platform::notify::APP_USER_MODEL_ID: a toast takes its name and icon from the shortcut carrying it.
-Name: "{autoprograms}\{#Name}"; Filename: "{app}\{#Exe}"; AppUserModelID: "Chatkord.Chatkord"
+; The AppUserModelID is the channel's, platform::notify's: a toast takes its name and icon from the shortcut
+; carrying it.
+Name: "{autoprograms}\{#Name}"; Filename: "{app}\{#Exe}"; AppUserModelID: "{#AppUserModelId}"
 
 [Registry]
 ; The entry Settings › Startup writes and Task Manager's switch for it (platform::startup), removed at uninstall

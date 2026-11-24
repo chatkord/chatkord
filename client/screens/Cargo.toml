@@ -11,6 +11,8 @@ testing = []
 
 [dependencies]
 report.workspace = true
+# The product name the tray and the debug report go by.
+channel = { path = "../channel" }
 terms = { path = "../terms" }
 net = { path = "../net" }
 words = { path = "../words" }

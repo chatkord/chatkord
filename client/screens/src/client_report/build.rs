@@ -51,6 +51,16 @@ pub(crate) struct Assembled {
     pub(crate) listing: Listing,
 }
 
+/// What a package built from `origin` on `channel` is: a release only from a release's tag on the stable channel, as
+/// a dev build is tagged too.
+fn source_of(origin: Option<&crate::Origin>, channel: channel::Channel) -> &'static str {
+    match (origin, channel) {
+        (Some(crate::Origin::Tag(_)), channel::Channel::Stable) => "release",
+        (Some(_), _) => "pre-release",
+        (None, _) => "local build",
+    }
+}
+
 /// The client's report for `inputs`, listed from its own parts.
 ///
 /// # Errors
@@ -58,12 +68,8 @@ pub(crate) struct Assembled {
 /// [`Full`] when a part does not fit the report's limits, which the caps below keep from happening.
 pub(crate) fn assemble(inputs: Inputs<'_>) -> Result<Assembled, Full> {
     let Inputs { stated, version, machine, encoders, devices, remembered, servers, calls, logs, created } = inputs;
-    let source = match stated.source {
-        Some(crate::Origin::Tag(_)) => "release",
-        Some(crate::Origin::Commit(_)) => "pre-release",
-        None => "local build",
-    };
-    let mut report = Report::new(Side::Client, Build { program: "Chatkord", version, source }, created);
+    let source = source_of(stated.source.as_ref(), channel::THIS.channel);
+    let mut report = Report::new(Side::Client, Build { program: channel::THIS.product, version, source }, created);
     let mut stands = Stands::new();
     report.section(build(stated)?)?;
     report.section(machine.map_or_else(|| Section::absent("System"), |machine| machine.system.clone()))?;
@@ -188,6 +194,16 @@ fn spread<T: Copy>(
 mod tests {
     use super::*;
     use crate::call::health::CallLooks;
+
+    #[test]
+    fn only_a_stable_build_from_a_tag_is_a_release() {
+        let tag = crate::Origin::Tag("v0.1.0-dev.20261124120000".into());
+        let commit = crate::Origin::Commit("1a2b3c4d".into());
+        assert_eq!(source_of(Some(&tag), channel::Channel::Stable), "release");
+        assert_eq!(source_of(Some(&tag), channel::Channel::Dev), "pre-release");
+        assert_eq!(source_of(Some(&commit), channel::Channel::Stable), "pre-release");
+        assert_eq!(source_of(None, channel::Channel::Dev), "local build");
+    }
 
     #[test]
     fn a_call_takes_the_rows_the_constants_count() {

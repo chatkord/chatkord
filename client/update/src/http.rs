@@ -46,7 +46,7 @@ impl Route for Hop<'_> {
     }
 
     fn user_agent(&self) -> String {
-        format!("Chatkord/{}", terms::BUILD)
+        format!("{}/{}", channel::THIS.file, terms::BUILD)
     }
 
     async fn connect(&self) -> Result<Stream, GetError> {

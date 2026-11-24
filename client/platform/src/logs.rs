@@ -1,5 +1,5 @@
 //! What a run logs, kept in a file of its own beside stderr, where a desktop launch (and a Windows release, which has
-//! no console) would lose it: `<state>/chatkord/logs/<seconds>-<pid>.log`, the newest [`KEEP`] runs kept, each up to
+//! no console) would lose it: `<state>/<id>/logs/<seconds>-<pid>.log`, the newest [`KEEP`] runs kept, each up to
 //! [`CAP`]. The folder is named by [`Platform`]; a program that named none
 //! keeps no log. What goes in is only what `report::note!` accepts: a literal and public facts, so no secret, name,
 //! host, address or path can reach it. [`open`] finds the newest earlier run's log before it makes this run's, and
@@ -11,9 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError, TryLockError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::state::FOLDER;
 use crate::{Platform, Unavailable};
-
-const FOLDER: &str = "chatkord";
 const LOGS: &str = "logs";
 const EXTENSION: &str = "log";
 /// What a run's mark that it ended cleanly is named by: its log's name with this extension.
@@ -407,6 +406,6 @@ mod tests {
             directory()
                 .is_none_or(|here| here.ends_with(".local/state") || std::env::var_os("XDG_STATE_HOME").is_some())
         );
-        assert_eq!(folder_in(Path::new("/s")), Path::new("/s").join("chatkord").join("logs"));
+        assert_eq!(folder_in(Path::new("/s")), Path::new("/s").join(channel::THIS.id).join("logs"));
     }
 }

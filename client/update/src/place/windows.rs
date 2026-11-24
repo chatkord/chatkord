@@ -11,8 +11,11 @@ use tempfile::TempPath;
 /// The uninstaller Inno Setup writes beside what it installed: a run without one is not from the setup's install.
 const UNINSTALLER: &str = "unins000.exe";
 
-/// The fetched setup's name where it is kept, replaced by the next update's.
-pub(crate) const SETUP: &str = "chatkord-setup.exe";
+/// The fetched setup's name where it is kept, replaced by the next update's: this channel's own, so two installs
+/// never stage the same file.
+pub(crate) fn setup_name() -> String {
+    format!("{}-setup.exe", channel::THIS.id)
+}
 
 /// The setup's own switch for an update: it opens the new run once it is installed, which a person's silent install
 /// does not.
@@ -41,7 +44,7 @@ pub(super) fn staging(_: &Path) -> PathBuf {
 
 /// Where `target`'s fetched setup is kept.
 fn setup(target: &Target) -> PathBuf {
-    target.staging.join(SETUP)
+    target.staging.join(setup_name())
 }
 
 /// `file` made the setup [`start`] runs, over the one an earlier update kept. The install is untouched.
@@ -85,7 +88,7 @@ mod tests {
     #[test]
     fn a_download_is_staged_in_this_users_temporary_directory_not_the_install() {
         let target = Target::at(PathBuf::from(r"C:\Programs\Chatkord\Chatkord.exe")).unwrap();
-        assert_eq!(setup(&target), std::env::temp_dir().join("chatkord-setup.exe"));
+        assert_eq!(setup(&target), std::env::temp_dir().join(format!("{}-setup.exe", channel::THIS.id)));
     }
 
     #[test]

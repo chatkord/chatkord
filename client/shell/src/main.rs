@@ -79,7 +79,7 @@ impl Scene for Product {
     }
 
     fn title(&self) -> String {
-        self.window.words().phrase(words::Phrase::WindowTitle).into_owned()
+        channel::THIS.product.to_owned()
     }
 
     fn full_screen(&self) -> bool {
@@ -361,10 +361,11 @@ enum Unforgotten {
 
 impl std::fmt::Display for Unforgotten {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Unforgotten::Running => "Chatkord is running, so nothing was removed.",
-            Unforgotten::Refused => "Chatkord could not remove everything it keeps on this device.",
-        })
+        let product = channel::THIS.product;
+        match self {
+            Unforgotten::Running => write!(f, "{product} is running, so nothing was removed."),
+            Unforgotten::Refused => write!(f, "{product} could not remove everything it keeps on this device."),
+        }
     }
 }
 
@@ -632,9 +633,8 @@ fn unhosted(why: shell::Unhosted) -> ExitCode {
 /// Tells the person in one plain sentence, in their language, why the run cannot start.
 fn alert_start(failed: words::failure::Start) {
     let words = words::Words::new(words::Language::negotiate(&platform::language::preferred()));
-    let title = words.said(&words::Sentence::Phrase(words::Phrase::WindowTitle));
     let body = words.said(&words::Sentence::Phrase(words::failure::start(failed)));
-    platform::alert::fatal(&title, &body);
+    platform::alert::fatal(channel::THIS.product, &body);
 }
 
 /// Ends the process now, in failure: what a deadline does once its time has passed, with nothing left that could end

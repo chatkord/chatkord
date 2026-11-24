@@ -14,7 +14,7 @@ use windows::UI::Notifications::{
 use windows::core::{HSTRING, IInspectable};
 
 /// The group every toast of ours is filed under, so one is found by its tag within it.
-const GROUP: &str = "chatkord";
+const GROUP: &str = channel::THIS.id;
 
 /// The toasts that may still be clicked: a toast activates only through the object that showed it.
 fn live() -> MutexGuard<'static, HashMap<String, ToastNotification>> {

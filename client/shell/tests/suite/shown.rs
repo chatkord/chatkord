@@ -12,7 +12,7 @@ mod lab {
 
     /// The run's log lines, from the one log under `home`.
     fn log(home: &Path) -> String {
-        let logs = home.join("chatkord").join("logs");
+        let logs = home.join(channel::THIS.id).join("logs");
         std::fs::read_dir(&logs)
             .map(|entries| {
                 entries.filter_map(Result::ok).filter_map(|entry| std::fs::read_to_string(entry.path()).ok()).collect()

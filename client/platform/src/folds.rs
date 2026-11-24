@@ -96,7 +96,6 @@ mod tests {
     #[test]
     fn an_empty_id_or_another_shape_is_passed_over_and_leaves_the_rest() {
         let folder = scratch("odd");
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         let odd = r#"{"wss://chat.example.invalid/v1":["","games"],"wss://books.example.invalid/v1":[""]}"#;
         raw_kept_in::<Held>(&folder, odd).unwrap();
         let read = folds(read_kept_in(&folder));

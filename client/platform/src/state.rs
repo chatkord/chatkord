@@ -31,8 +31,8 @@ pub struct Row {
     pub pin: Option<KeyPin>,
 }
 
-/// `<config>/chatkord/`, where [`crate::kept::FILE`] is.
-pub(crate) const FOLDER: &str = "chatkord";
+/// `<config>/<id>/`, where [`crate::kept::FILE`] is; the cache, the logs and the run folder are named by it too.
+pub(crate) const FOLDER: &str = channel::THIS.id;
 
 /// The rows the servers' section holds, as text. A row whose address does not parse is dropped on reading.
 #[derive(Default, Deserialize, Serialize)]
@@ -586,5 +586,14 @@ mod tests {
         assert_eq!(chosen(from_root("chatkord"), from_root("/run/user/chatkord")), from_root("/run/user/chatkord"));
         assert_eq!(chosen(from_root("/srv/chatkord"), from_root("/run/user/chatkord")), from_root("/srv/chatkord"));
         assert_eq!(chosen(from_root("./chatkord"), from_root("chatkord")), None);
+    }
+
+    #[test]
+    fn every_place_this_build_keeps_things_is_named_by_its_channel_s_id() {
+        let id = channel::THIS.id;
+        assert_eq!(FOLDER, id, "the config, cache, state and run folders");
+        assert_eq!(crate::keyring::SERVICE, id, "the keyring service");
+        #[cfg(target_os = "linux")]
+        assert_eq!(crate::launcher::DESKTOP_ENTRY, id, "the desktop entry and the icons");
     }
 }

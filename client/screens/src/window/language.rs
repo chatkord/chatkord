@@ -125,7 +125,6 @@ mod tests {
             "fr",
             "Français",
             "language-name = Français\n\
-             window-title = Chatkord\n\
              tray-open = Ouvrir Chatkord\n\
              mute-mic = Couper le micro\n\
              deafen-self = Couper le son\n\
@@ -240,12 +239,12 @@ mod tests {
             let menu = window.tray_menu();
             std::iter::once(menu.title).chain(menu.items.into_iter().map(|item| item.label)).collect::<Vec<_>>()
         };
-        assert_eq!(tray(&window), ["Chatkord", "Open Chatkord", "Mute", "Deafen", "Quit Chatkord"]);
+        assert_eq!(tray(&window), [channel::THIS.product, "Open Chatkord", "Mute", "Deafen", "Quit Chatkord"]);
         window.update(Message::ChooseLanguage(Some(french())), clock.at());
         assert_eq!(said(&window).as_deref(), Some("Vous avez un rôle plus élevé sur Book club"), "the same toast");
         assert_eq!(
             tray(&window),
-            ["Chatkord", "Ouvrir Chatkord", "Couper le micro", "Couper le son", "Quitter Chatkord"]
+            [channel::THIS.product, "Ouvrir Chatkord", "Couper le micro", "Couper le son", "Quitter Chatkord"]
         );
     }
 }

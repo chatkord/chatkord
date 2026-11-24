@@ -799,6 +799,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel"
+version = "0.0.0"
+
+[[package]]
 name = "chat"
 version = "0.0.0"
 dependencies = [
@@ -3770,6 +3774,7 @@ name = "platform"
 version = "0.0.0"
 dependencies = [
  "ashpd",
+ "channel",
  "choices",
  "design",
  "futures-util",
@@ -3967,6 +3972,7 @@ dependencies = [
 name = "pw"
 version = "0.0.0"
 dependencies = [
+ "channel",
  "libloading 0.9.1",
  "libspa",
  "libspa-sys",
@@ -4457,6 +4463,7 @@ checksum = "d68f2ec51b097e4c1a75b681a8bec621909b5e91f15bb7b840c4f2f7b01148b2"
 name = "screens"
 version = "0.0.0"
 dependencies = [
+ "channel",
  "chat",
  "choices",
  "design",
@@ -4661,12 +4668,12 @@ dependencies = [
  "accesskit_unix",
  "accesskit_windows",
  "call",
+ "channel",
  "chat",
  "choices",
  "cli",
  "design",
  "errands",
- "fluent-syntax",
  "iced_wgpu",
  "iced_widget",
  "iced_winit",
@@ -5565,6 +5572,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 name = "update"
 version = "0.0.0"
 dependencies = [
+ "channel",
  "data-encoding",
  "fetch",
  "http-body-util",

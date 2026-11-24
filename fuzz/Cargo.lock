@@ -344,6 +344,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel"
+version = "0.0.0"
+
+[[package]]
 name = "chat"
 version = "0.0.0"
 dependencies = [
@@ -1498,6 +1502,7 @@ dependencies = [
 name = "pw"
 version = "0.0.0"
 dependencies = [
+ "channel",
  "libloading 0.9.1",
  "libspa",
  "libspa-sys",
@@ -1734,6 +1739,7 @@ dependencies = [
 name = "screens"
 version = "0.0.0"
 dependencies = [
+ "channel",
  "chat",
  "choices",
  "design",
@@ -2340,6 +2346,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 name = "update"
 version = "0.0.0"
 dependencies = [
+ "channel",
  "data-encoding",
  "fetch",
  "http-body-util",

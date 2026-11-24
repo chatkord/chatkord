@@ -23,6 +23,8 @@ terms = { path = "../terms" }
 words = { path = "../words" }
 choices = { path = "../choices" }
 platform = { path = "../platform" }
+# The product name the window, its fatal alert and its messages go by.
+channel = { path = "../channel" }
 errands = { path = "../errands" }
 picture = { path = "../picture" }
 # Which VA-API driver libva tries first, decided before any thread starts (`media::carried_last_where_refused`).
@@ -55,10 +57,10 @@ cli = { path = "../cli" }
 accesskit_windows = "0.35.2"
 
 # The executable's own icon and name (what Explorer and Task Manager show), compiled into its resources; the name
-# read from the window's catalog, by the parser `words` uses. No `toml`: nothing is read from the manifest.
+# is the channel's product. No `toml`: nothing is read from the manifest.
 [target.'cfg(windows)'.build-dependencies]
 winresource = { version = "0.1.34", default-features = false }
-fluent-syntax.workspace = true
+channel = { path = "../channel" }
 
 [dev-dependencies]
 # The anonymity test builds its window from the screens' fixtures.

@@ -120,7 +120,7 @@ fn properties(category: &CStr, name: &CStr, device: Option<&str>) -> Vec<(&'stat
         (c"media.category", category.to_string_lossy().into_owned()),
         (c"media.role", "Communication".to_owned()),
         (c"node.name", name.to_string_lossy().into_owned()),
-        (c"node.description", "Chatkord".to_owned()),
+        (c"node.description", channel::THIS.product.to_owned()),
         (c"node.latency", LATENCY.to_owned()),
     ];
     if let Some(device) = device {

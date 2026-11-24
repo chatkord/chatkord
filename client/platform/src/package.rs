@@ -41,7 +41,7 @@ pub fn licences() -> Option<PathBuf> {
 #[cfg(target_os = "linux")]
 fn folder() -> Option<PathBuf> {
     let mount = PathBuf::from(std::env::var_os("APPDIR")?);
-    mount.is_absolute().then(|| mount.join("usr").join("share").join("licenses").join("chatkord"))
+    mount.is_absolute().then(|| mount.join("usr").join("share").join("licenses").join(channel::THIS.id))
 }
 
 #[cfg(target_os = "windows")]

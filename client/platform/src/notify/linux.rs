@@ -14,7 +14,7 @@ use zbus::zvariant::Value;
 use zbus::{Connection, MatchRule, MessageStream};
 
 /// The name the desktop shows a popup under.
-const APP_NAME: &str = "Chatkord";
+const APP_NAME: &str = channel::THIS.product;
 /// The action a click on the popup's body invokes.
 const DEFAULT_ACTION: &str = "default";
 /// What the default action is called, for a server that lists actions.

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The software centre's entry. The name and summary are the desktop entry's and the release version.txt's, filled
-     in by scripts/package/linux.sh. -->
+<!-- The software centre's entry. The id and name are the channel's, the summary the desktop entry's, filled
+     in with the version by scripts/package/linux.sh. -->
 <component type="desktop-application">
-  <id>chatkord</id>
+  <id>@ID@</id>
   <metadata_license>CC0-1.0</metadata_license>
   <name>@NAME@</name>
   <summary>@SUMMARY@</summary>
@@ -18,9 +18,9 @@
       Screens are encoded on the graphics card where it can, and every stream says which path it took.
     </p>
   </description>
-  <launchable type="desktop-id">chatkord.desktop</launchable>
+  <launchable type="desktop-id">@ID@.desktop</launchable>
   <provides>
-    <binary>chatkord</binary>
+    <binary>@ID@</binary>
   </provides>
   <categories>
     <category>Network</category>

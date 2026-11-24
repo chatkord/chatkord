@@ -7,6 +7,8 @@ description = "The PipeWire client capture and the window's sounds need and libp
 
 # Linux only: PipeWire is the screen cast's transport there.
 [target.'cfg(target_os = "linux")'.dependencies]
+# The product name its nodes are described by.
+channel = { path = "../channel" }
 # The types and constants of the C headers, read from the installed ones when this builds. No function of it is
 # called: nothing is resolved at link time, so nothing here is shadowed.
 pipewire-sys = "=0.10.1"

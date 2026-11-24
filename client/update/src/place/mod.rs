@@ -14,7 +14,7 @@ mod system;
 mod system;
 
 #[cfg(all(test, target_os = "windows"))]
-pub(crate) use system::SETUP;
+pub(crate) use system::setup_name;
 
 use crate::error::UpdateError;
 use crate::fetch::Fetched;

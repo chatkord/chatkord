@@ -1,6 +1,6 @@
 //! How Chatkord starts with this device and what closing its window does. Opening at sign-in is the system's own
 //! entry, read and written here and kept nowhere else: on Linux the desktop's autostart entry
-//! (`<config>/autostart/chatkord.desktop`, the XDG autostart rule), on Windows the user's `Run` value, as Discord's
+//! (`<config>/autostart/<id>.desktop`, the XDG autostart rule), on Windows the user's `Run` value, as Discord's
 //! and Slack's are, read with Task Manager's switch for it. Where a start at sign-in opens and what a close does are
 //! kept in the kept file's `startup` section.
 
@@ -20,7 +20,8 @@ const FILE: &str = "startup";
 /// What a start at sign-in carries, so it is told from a start by a person.
 pub const AUTOSTART_ARGUMENT: &str = "--autostart";
 
-/// The desktop entry the package installs, whose keys an autostart entry repeats with its own command.
+/// The desktop entry the package installs, whose keys an autostart entry repeats with its own command. Its `@ID@` and
+/// `@PRODUCT@` are this channel's id and product name.
 #[cfg(target_os = "linux")]
 const ENTRY: &str = include_str!("../../shell/assets/chatkord.desktop");
 
@@ -137,7 +138,7 @@ fn program(appimage: Option<std::ffi::OsString>, exe: std::io::Result<PathBuf>) 
 
 #[cfg(target_os = "linux")]
 fn entry_path(config: &Path) -> PathBuf {
-    config.join("autostart").join("chatkord.desktop")
+    config.join("autostart").join(format!("{}.desktop", channel::THIS.id))
 }
 
 /// Whether the autostart entry is there and not hidden, as the desktop reads it.
@@ -180,6 +181,8 @@ pub(crate) fn entry(program: &Path, argument: Option<&str>) -> String {
         None => format!("Exec=\"{quoted}\""),
     };
     ENTRY
+        .replace("@ID@", channel::THIS.id)
+        .replace("@PRODUCT@", channel::THIS.product)
         .lines()
         .flat_map(|line| {
             if line.starts_with("Exec=") {
@@ -310,12 +313,12 @@ mod run_key {
         pub(super) name: String,
     }
 
-    /// Windows' own keys, the value named as the setup names the product (the catalog's window title).
+    /// Windows' own keys, the value named as the setup names the product.
     pub(super) fn user() -> Keys {
         Keys {
             run: r"Software\Microsoft\Windows\CurrentVersion\Run",
             approved: r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
-            name: words::Words::english().phrase(words::Phrase::WindowTitle).into_owned(),
+            name: channel::THIS.product.to_owned(),
         }
     }
 
@@ -452,7 +455,7 @@ mod run_key {
         fn the_run_value_is_the_setting_written_and_removed_and_task_managers_switch_turns_it_off() {
             let program = Path::new(r"C:\Program Files\Chat kord\Chatkord.exe");
             let keys = test();
-            assert_eq!(keys.name, "Chatkord", "named as the setup names the product");
+            assert_eq!(keys.name, channel::THIS.product, "named as the setup names the product");
             assert_eq!(at_sign_in(&keys), AtSignIn::Not, "none there");
             set_at_sign_in(&keys, AtSignIn::Opens, program).unwrap();
             assert_eq!(at_sign_in(&keys), AtSignIn::Opens);
@@ -493,7 +496,13 @@ mod tests {
         assert_eq!(at_sign_in(&config), AtSignIn::Opens);
         let entry = std::fs::read_to_string(entry_path(&config)).unwrap();
         assert!(entry.contains("Exec=\"/opt/chat kord/chatkord\" --autostart\n"), "{entry}");
-        assert!(entry.contains("Name=Chatkord\n") && entry.contains("Icon=chatkord\n"), "the package's keys: {entry}");
+        let (id, product) = (channel::THIS.id, channel::THIS.product);
+        assert!(entry.contains(&format!("Name={product}\n")) && entry.contains(&format!("Icon={id}\n")), "{entry}");
+        assert_eq!(
+            entry_path(&config).file_name().and_then(|name| name.to_str()),
+            Some(format!("{id}.desktop").as_str())
+        );
+        assert!(!entry.contains('@'), "every placeholder is filled: {entry}");
         std::fs::write(entry_path(&config), entry + "Hidden=true\n").unwrap();
         assert_eq!(at_sign_in(&config), AtSignIn::Not, "turned off in the desktop's own settings");
         set_at_sign_in(&config, AtSignIn::Not, &program).unwrap();

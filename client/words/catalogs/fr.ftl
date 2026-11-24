@@ -4,8 +4,6 @@
 
 # Le nom de cette langue dans cette langue, sous lequel Réglages › Apparence la liste.
 language-name = Français
-# Le titre de la fenêtre, que disent un sélecteur de tâches et un lecteur d’écran.
-window-title = Chatkord
 saved-sign-in-expired = La connexion enregistrée a expiré ; saisissez votre mot de passe.
 saved-sign-in-held = Ce serveur n’a pas répondu ; votre connexion enregistrée est conservée, rien n’est perdu.
 keyring-unavailable = Le trousseau du système n’est pas disponible, votre mot de passe vous sera redemandé la prochaine fois.

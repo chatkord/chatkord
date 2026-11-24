@@ -22,7 +22,7 @@ pub const MAX_PICTURE_BYTES: usize = 2 * 1024 * 1024;
 /// The most redirects a preview follows, a page's or a picture's.
 pub const MAX_REDIRECTS: usize = 3;
 
-/// The request's `User-Agent`: generic, with no version, system or owner.
+/// The request's `User-Agent`: generic, with no version, system, channel or owner.
 const USER_AGENT: &str = "Mozilla/5.0 (compatible; Chatkord link preview)";
 
 /// How long one step waits, inside the total deadline.

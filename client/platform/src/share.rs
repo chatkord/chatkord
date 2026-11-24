@@ -103,7 +103,6 @@ mod tests {
     }
 
     fn written(folder: &std::path::Path, text: &str) {
-        std::fs::create_dir_all(folder.join("chatkord")).unwrap();
         raw_kept_in::<Held>(folder, text).unwrap();
     }
 

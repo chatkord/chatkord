@@ -1,7 +1,6 @@
 ### Alles, was das Fenster einer Person sagt, auf Deutsch.
 
 language-name = Deutsch
-window-title = Chatkord
 saved-sign-in-expired = Die gespeicherte Anmeldung ist abgelaufen. Gib dein Passwort ein.
 saved-sign-in-held = Der Server hat nicht geantwortet. Deine gespeicherte Anmeldung bleibt erhalten, es ging nichts verloren.
 keyring-unavailable = Der Schlüsselbund des Systems ist nicht verfügbar. Beim nächsten Mal wirst du nach deinem Passwort gefragt.

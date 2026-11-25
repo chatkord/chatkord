@@ -31,8 +31,12 @@ if [[ ! -x "$inno/ISCC.exe" ]]; then
   [[ -x "$inno/ISCC.exe" ]] || { echo "FAIL: Inno Setup $INNO_VERSION did not install into $inno"; exit 1; }
 fi
 
-[[ "$(cat build/deps/.recipe 2> /dev/null)" == "$(scripts/deps/ffmpeg-windows.sh --recipe)" ]] ||
-  { echo "FAIL: build/deps is not this tree's FFmpeg; run scripts/deps/ffmpeg-windows.sh"; exit 1; }
+recipe=$(scripts/deps/ffmpeg-windows.sh --recipe)
+if [[ "$(cat build/deps/.recipe 2> /dev/null)" != "$recipe" ]]; then
+  echo "FAIL: build/deps is not this tree's FFmpeg; run scripts/deps/ffmpeg-windows.sh. Built from (<) and this tree's (>):"
+  diff build/deps/.recipe - <<< "$recipe" || true
+  exit 1
+fi
 # shellcheck source=../../protocol/scripts/find-python.sh
 . protocol/scripts/find-python.sh
 [[ -n "${PYTHON:-}" ]] || { echo "FAIL: no Python $PYTHON_FLOOR+"; exit 1; }

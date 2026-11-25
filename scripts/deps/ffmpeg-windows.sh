@@ -25,7 +25,8 @@ LIBVPL_TAG=v2.17.0;             LIBVPL_COMMIT=d77f9195cf495b937631607333288fd917
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 recipe() {
-  (cd "$ROOT" && sha256sum scripts/deps/ffmpeg-windows.sh scripts/deps/ffmpeg-pin.sh scripts/deps/codecs-pin.sh \
+  # --text: Git Bash marks each path `*` (binary mode), and MSYS2's bash, which writes .recipe, is checked from it.
+  (cd "$ROOT" && sha256sum --text scripts/deps/ffmpeg-windows.sh scripts/deps/ffmpeg-pin.sh scripts/deps/codecs-pin.sh \
     scripts/deps/source.sh patches/ffmpeg/*.patch)
   # An install names its absolute prefix (its pkg-config files), so a tree moved elsewhere builds it again.
   echo "in $ROOT"

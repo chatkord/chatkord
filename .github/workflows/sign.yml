@@ -17,6 +17,11 @@ on:
         description: "The release's tag, v<version>, whose version the manifest must say"
         required: true
         type: string
+    # A reusable workflow reads an environment's secret only when its caller passes it; one left out would be empty.
+    secrets:
+      CHATKORD_RELEASE_KEY:
+        description: "The channel's signing key, passed by name from the environment the caller names"
+        required: true
 
 permissions: {}
 

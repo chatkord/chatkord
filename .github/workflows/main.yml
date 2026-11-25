@@ -109,6 +109,8 @@ jobs:
     with:
       environment: release
       tag: ${{ needs.release.outputs.tag }}
+    secrets:
+      CHATKORD_RELEASE_KEY: ${{ secrets.CHATKORD_RELEASE_KEY }}
 
   # The packages, their sums and the signed manifest attached to the release; a client reads the manifest, then its
   # signature, so the signature is there first.

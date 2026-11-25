@@ -60,6 +60,8 @@ jobs:
     with:
       environment: dev-release
       tag: v${{ needs.version.outputs.version }}
+    secrets:
+      CHATKORD_RELEASE_KEY: ${{ secrets.CHATKORD_RELEASE_KEY }}
 
   publish:
     needs: [version, sign]

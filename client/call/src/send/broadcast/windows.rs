@@ -8,7 +8,7 @@ use choices::ShareQuality;
 use std::sync::Arc;
 
 /// Opens the capture of the picker's `selection` on the blocking pool, deciding what the share hears beside it.
-fn open(
+pub(super) fn open(
     selection: &::share::Selection,
     quality: ShareQuality,
     sound: SoundAsked,

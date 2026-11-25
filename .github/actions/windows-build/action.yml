@@ -12,22 +12,35 @@ runs:
       run: |
         C:/msys64/usr/bin/pacman -S --noconfirm --needed make nasm pkgconf diffutils
         choco install pkgconfiglite --version 0.28 -y --no-progress
-    # The key is the recipes' own digest (FFmpeg's names every file it builds from), so no list of them is kept here.
+    # Each key is its recipes' own digest (FFmpeg's names every file it builds from), so no list of them is kept here.
     - id: recipe
       shell: bash
       run: |
-        recipes=$(scripts/deps/ffmpeg-windows.sh --recipe; sha256sum scripts/deps/webrtc.sh scripts/deps/python-tools.txt)
-        echo "digest=$(sha256sum <<< "$recipes" | cut -c1-32)" >> "$GITHUB_OUTPUT"
-    # The Windows half of the builder image: built once per recipe.
+        deps=$(scripts/deps/ffmpeg-windows.sh --recipe; sha256sum --text scripts/deps/python-tools.txt)
+        echo "deps=$(sha256sum <<< "$deps" | cut -c1-32)" >> "$GITHUB_OUTPUT"
+        echo "webrtc=$(sha256sum --text scripts/deps/webrtc.sh | cut -c1-32)" >> "$GITHUB_OUTPUT"
+    # The Windows half of the builder image, built once per recipe and saved as soon as it is built: a cache saved at
+    # the job's end is saved only when every later step passed.
     - id: deps
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           build/deps
-          build/deps-src/webrtc/download
           build/deps-src/wheels
-        key: windows-deps-${{ steps.recipe.outputs.digest }}
+        key: windows-deps-${{ steps.recipe.outputs.deps }}
     - name: Build FFmpeg, which the cache did not hold
       if: steps.deps.outputs.cache-hit != 'true'
       shell: bash
       run: scripts/deps/ffmpeg-windows.sh
+    - if: steps.deps.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          build/deps
+          build/deps-src/wheels
+        key: windows-deps-${{ steps.recipe.outputs.deps }}
+    # The engine's download, which the build fetches later: saved at the end of a job that passed.
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: build/deps-src/webrtc/download
+        key: windows-webrtc-${{ steps.recipe.outputs.webrtc }}
